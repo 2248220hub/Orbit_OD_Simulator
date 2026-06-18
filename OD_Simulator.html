@@ -1,0 +1,2045 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OD Console — Batch Least-Squares Journey</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0A0E1A; --panel:#111726; --panel2:#0E1422; --line:#232C42;
+  --txt:#E8ECF6; --mut:#8B96B0;
+  --truth:#45D6C4; --ref:#FFB454; --est:#7AA2F7; --station:#F5D76E;
+  --bad:#FF6B7A; --ok:#7BE3A1;
+  --serif:'Source Serif 4', Georgia, serif;
+  --sans:'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --mono:'JetBrains Mono', ui-monospace, Menlo, monospace;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{height:100%;}
+body{
+  background:var(--bg); color:var(--txt); font-family:var(--sans);
+  font-size:15px; line-height:1.55; overflow:hidden;
+}
+/* ---------- Header ---------- */
+header{
+  display:flex; align-items:center; gap:16px;
+  padding:10px 18px; border-bottom:1px solid var(--line);
+  background:var(--panel2);
+}
+.brand{font-family:var(--serif); font-weight:700; font-size:17px; white-space:nowrap;}
+.brand small{display:block; font-family:var(--sans); font-weight:400; font-size:10.5px; color:var(--mut); letter-spacing:.06em; text-transform:uppercase;}
+.chips{display:flex; gap:6px; overflow-x:auto; flex:1; padding:2px;}
+.chip{
+  flex:0 0 auto; display:flex; align-items:center; gap:6px;
+  padding:5px 11px; border:1px solid var(--line); border-radius:999px;
+  font-size:12px; color:var(--mut); cursor:default; user-select:none;
+  background:transparent; transition:all .2s;
+}
+.chip .n{font-family:var(--mono); font-size:10.5px; opacity:.8;}
+.chip.done{color:var(--txt); border-color:#3A4663; cursor:pointer;}
+.chip.cur{color:var(--bg); background:var(--ref); border-color:var(--ref); font-weight:600;}
+.chip.cur .n{opacity:1;}
+#restart{
+  flex:0 0 auto; border:1px solid var(--line); background:transparent; color:var(--mut);
+  border-radius:8px; padding:6px 11px; font-family:var(--sans); font-size:12.5px; cursor:pointer;
+}
+#restart:hover{color:var(--txt); border-color:#3A4663;}
+#muteBtn{flex:0 0 auto; border:1px solid var(--line); background:transparent; color:var(--mut);
+  border-radius:8px; padding:6px 9px; cursor:pointer; font-size:13px; line-height:1;}
+#muteBtn:hover{color:var(--txt); border-color:#3A4663;}
+#muteBtn.off{opacity:.55;}
+/* ---------- Layout ---------- */
+main{display:flex; height:calc(100% - 57px);}
+#left{
+  width:40%; min-width:340px; max-width:560px;
+  border-right:1px solid var(--line); overflow-y:auto;
+  padding:14px 18px 16px;
+}
+/* thin scrollbar — only appears if a step genuinely overflows a very short window */
+#left::-webkit-scrollbar{width:7px;}
+#left::-webkit-scrollbar-thumb{background:var(--line); border-radius:4px;}
+#right{flex:1; display:flex; flex-direction:column; min-width:0;}
+#vizWrap{position:relative; flex:3; min-height:0; background:
+  radial-gradient(ellipse at 50% 45%, #0D1322 0%, var(--bg) 75%);}
+#orbit{position:absolute; inset:0; width:100%; height:100%;}
+#legend{
+  position:absolute; top:10px; right:12px; background:rgba(14,20,34,.82);
+  border:1px solid var(--line); border-radius:9px; padding:8px 12px;
+  font-size:11px; color:var(--mut); backdrop-filter:blur(4px);
+}
+#legend div{display:flex; align-items:center; gap:7px; margin:2px 0;}
+.sw{width:16px; height:0; border-top:2.4px solid; border-radius:2px;}
+.sw.dash{border-top-style:dashed;}
+#vizTag{
+  position:absolute; left:12px; top:10px; font-family:var(--mono);
+  font-size:10.5px; letter-spacing:.08em; color:var(--mut); text-transform:uppercase;
+}
+#resultsWrap{
+  flex:1; min-height:148px; border-top:1px solid var(--line);
+  display:flex; background:var(--panel2);
+}
+#plotBox{flex:1.35; position:relative; min-width:0;}
+#plot{position:absolute; inset:0; width:100%; height:100%;}
+#readout{
+  flex:1; border-left:1px solid var(--line); overflow:auto;
+  padding:10px 14px; font-family:var(--mono); font-size:11.5px; line-height:1.6;
+  color:var(--txt); white-space:pre; 
+}
+#readout .lbl{color:var(--mut);}
+#readout .hi{color:var(--ref);}
+#readout .gd{color:var(--ok);}
+#readout .bad{color:var(--bad);}
+/* ---------- Left panel content ---------- */
+.stepEyebrow{
+  font-family:var(--mono); font-size:11px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--ref); margin-bottom:6px;
+}
+h1.stepTitle{font-family:var(--serif); font-size:21px; font-weight:700; line-height:1.18; margin-bottom:8px;}
+.prose{color:#C7CFE2; margin-bottom:9px; font-size:13.5px;}
+.prose b{color:var(--txt);}
+.prose em{color:var(--truth); font-style:normal;}
+/* formula card = "flight rule" */
+.fcard{
+  border:1px solid var(--line); border-left:3px solid var(--ref);
+  background:var(--panel); border-radius:0 10px 10px 0;
+  padding:9px 12px; margin:9px 0;
+}
+.fcard.teal{border-left-color:var(--truth);}
+.fcard.blue{border-left-color:var(--est);}
+.fcard-t{
+  font-family:var(--mono); font-size:10px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--mut); margin-bottom:6px;
+}
+.fmath{
+  font-family:var(--mono); font-size:14.5px; color:var(--txt);
+  padding:4px 0 6px; overflow-x:auto; white-space:pre;
+}
+.fmath i{color:var(--truth); font-style:normal;}
+.fwhy{font-size:12.5px; color:var(--mut);}
+/* choices + buttons */
+.choiceRow{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 4px;}
+/* filter / prior pill selectors */
+.filterWrap{border:1px solid var(--line); border-radius:11px; padding:9px 11px; margin:2px 0 10px;
+  background:linear-gradient(180deg,#0E1422,#0C111D);}
+.pillRow{display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 4px;}
+.pill{border:1px solid var(--line); background:var(--panel); color:var(--mut);
+  border-radius:999px; padding:5px 12px; font-family:var(--sans); font-size:12.5px;
+  cursor:pointer; transition:all .15s; white-space:nowrap;}
+.pill:hover{border-color:#3A4663; color:var(--txt);}
+.pill.sel{border-color:var(--ref); background:var(--ref); color:var(--bg); font-weight:600;}
+/* batch / sequential category tabs (mutually exclusive) */
+.tabRow{display:flex; gap:6px; margin:0 0 8px;}
+.tab{flex:1; text-align:center; border:1px solid var(--line); background:var(--panel2); color:var(--mut);
+  border-radius:8px; padding:6px 10px; font-size:12.5px; font-weight:600; cursor:pointer; transition:all .15s;}
+.tab:hover{color:var(--txt); border-color:#3A4663;}
+.tab.sel{background:var(--est); border-color:var(--est); color:var(--bg);}
+.pill:disabled,.tab:disabled{opacity:.5; cursor:not-allowed;}
+.pill:disabled:hover,.tab:disabled:hover{color:var(--mut); border-color:var(--line);}
+.lockNote{font-size:11px; color:var(--mut); margin:6px 0 2px; font-style:italic;}
+/* collapsible formula box keeps the panel to a single screen */
+.toggleBox{border:1px solid var(--line); border-radius:9px; margin-top:9px; background:var(--panel2); overflow:hidden;}
+.toggleBox>summary{cursor:pointer; padding:7px 11px; font-family:var(--mono); font-size:10px;
+  letter-spacing:.1em; text-transform:uppercase; color:var(--mut); list-style:none;}
+.toggleBox>summary::-webkit-details-marker{display:none;}
+.toggleBox>summary::before{content:"▸ "; color:var(--ref);}
+.toggleBox[open]>summary::before{content:"▾ ";}
+.toggleBox[open]>summary{color:var(--ref); border-bottom:1px solid var(--line);}
+.toggleBox .fcard{margin:8px 10px;}
+/* formulae in toggles wrap instead of scrolling horizontally */
+.toggleBox .fmath{white-space:pre-wrap; word-break:break-word; overflow-x:hidden; font-size:11.5px; line-height:1.5;}
+.toggleBox .fcard-t{word-break:break-word;}
+.sliderStack{margin:2px 0 0;}
+.sliderStack .sliderRow{margin:8px 0 0;}
+.stepEyebrow.mini{margin:8px 0 2px;}
+.opt{
+  border:1px solid var(--line); background:var(--panel); color:var(--txt);
+  border-radius:9px; padding:9px 13px; font-family:var(--sans); font-size:13px;
+  cursor:pointer; transition:all .15s; text-align:left;
+}
+.opt small{display:block; color:var(--mut); font-size:11px; margin-top:1px;}
+.opt:hover{border-color:#3A4663;}
+.opt.sel{border-color:var(--ref); background:#1A1610; color:var(--ref);}
+.opt.sel small{color:#B98A45;}
+.opt:disabled{opacity:.45; cursor:not-allowed;}
+.act{
+  display:inline-block; margin:12px 8px 4px 0;
+  background:var(--ref); color:#1A1208; border:none; border-radius:9px;
+  padding:10px 18px; font-family:var(--sans); font-weight:700; font-size:14px;
+  cursor:pointer; transition:transform .12s, box-shadow .12s;
+}
+.act:hover:not(:disabled){transform:translateY(-1px); box-shadow:0 4px 18px rgba(255,180,84,.25);}
+.act:disabled{opacity:.35; cursor:not-allowed; transform:none; box-shadow:none;}
+.act.ghosty{background:transparent; color:var(--ref); border:1px solid var(--ref);}
+.act.next{background:var(--truth); color:#06201C; display:block; clear:both; width:fit-content; margin-top:16px;}
+.note{
+  font-size:12px; color:var(--mut); border:1px dashed var(--line);
+  border-radius:9px; padding:8px 12px; margin:12px 0;
+}
+.note.warn{color:#F2B8C0; border-color:#5A2B33;}
+.kbd{font-family:var(--mono); font-size:.92em; color:var(--ref);}
+.statusline{font-family:var(--mono); font-size:12px; color:var(--ok); margin-top:8px; min-height:18px;}
+/* reusable slider */
+.sliderRow{margin:14px 0 4px;}
+.sliderLbl{display:flex; justify-content:space-between; align-items:center;
+  font-size:12.5px; color:var(--mut); margin-bottom:6px;}
+.sliderVal{font-family:var(--mono); font-size:12px; color:var(--ref);}
+.slider{-webkit-appearance:none; appearance:none; width:100%; height:4px;
+  border-radius:999px; background:var(--line); outline:none; cursor:pointer;}
+.slider::-webkit-slider-thumb{-webkit-appearance:none; appearance:none;
+  width:16px; height:16px; border-radius:50%; background:var(--ref);
+  border:2px solid var(--bg); cursor:pointer;}
+.slider::-moz-range-thumb{width:16px; height:16px; border-radius:50%;
+  background:var(--ref); border:2px solid var(--bg); cursor:pointer;}
+/* ---------- Mobile ---------- */
+@media (max-width:880px){
+  body{overflow:auto;}
+  main{flex-direction:column; height:auto;}
+  #left{width:100%; max-width:none; min-width:0; border-right:none;
+        border-bottom:1px solid var(--line); padding:18px 16px 26px; order:2;}
+  #right{order:1; flex:none;}
+  #vizWrap{height:46vh; flex:none;}
+  #resultsWrap{height:32vh; flex:none; flex-direction:row;}
+  #readout{font-size:10.5px;}
+  header{padding:8px 12px;}
+  .brand{font-size:15px;}
+}
+@media (prefers-reduced-motion:reduce){ *{transition:none !important;} }
+/* ---------- boot / loading screen ---------- */
+#boot{position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center;
+  background:radial-gradient(ellipse at 50% 38%, #0E1526 0%, #05070E 72%);
+  transition:opacity .6s ease;}
+#boot.hide{opacity:0; pointer-events:none;}
+#boot .bootInner{width:min(440px,74vw); text-align:center; font-family:var(--mono);}
+#boot .bootMark{width:46px;height:46px;margin:0 auto 16px;border-radius:50%;
+  background:radial-gradient(circle at 36% 34%, #3B82C4, #0A2247 70%);
+  box-shadow:0 0 22px rgba(96,165,250,.45), inset 0 0 10px rgba(0,0,0,.5);}
+.bootTitle{font-family:var(--serif); font-size:21px; font-weight:700; letter-spacing:.04em; color:var(--txt);}
+.bootSub{font-size:10.5px; letter-spacing:.22em; text-transform:uppercase; color:var(--mut); margin:9px 0 22px;}
+.bootBarWrap{height:3px; background:var(--line); border-radius:999px; overflow:hidden;}
+.bootBar{height:100%; width:0%; border-radius:999px;
+  background:linear-gradient(90deg,var(--truth),var(--est),var(--ref)); transition:width .14s ease;
+  box-shadow:0 0 10px rgba(122,162,247,.6);}
+.bootPct{font-size:10.5px; color:var(--mut); margin-top:11px; letter-spacing:.14em;}
+/* ---------- mission epoch / atomic time ---------- */
+#clocks{display:flex; align-items:center; gap:14px; margin-left:auto; padding:0 6px;}
+.liveDot{width:8px; height:8px; border-radius:50%; background:var(--ok);
+  box-shadow:0 0 8px var(--ok); animation:livePulse 1.8s ease-in-out infinite;}
+@keyframes livePulse{0%,100%{opacity:.35; box-shadow:0 0 4px var(--ok);}50%{opacity:1; box-shadow:0 0 11px var(--ok);}}
+.clk{display:flex; flex-direction:column; line-height:1.15;}
+.clk-l{font-family:var(--mono); font-size:8.5px; letter-spacing:.16em; color:var(--mut); text-transform:uppercase;}
+.clk-v{font-family:var(--mono); font-size:12px; color:var(--truth); white-space:nowrap;}
+/* ---------- 3D Earth layer (over the 2D fallback canvas) ---------- */
+#earth3d{position:absolute; inset:0; z-index:1;}            /* opaque 3D Earth/stars behind */
+#earth3d canvas{display:block; width:100%; height:100%;}
+#orbit{z-index:2;}                                          /* transparent 2D orbit layer on top */
+#vizTag,#legend{z-index:3;}
+/* ---------- ground-track minimap (engraved) ---------- */
+#gtrack{position:absolute; right:12px; bottom:12px; width:208px; height:104px; z-index:3;
+  opacity:.82; mix-blend-mode:screen; pointer-events:none;
+  filter:drop-shadow(0 0 6px rgba(0,0,0,.5));}
+/* ---------- elements panel (glassmorphism, slide-in) ---------- */
+#elemTab{position:absolute; right:0; top:50%; transform:translateY(-50%); z-index:4;
+  writing-mode:vertical-rl; border:1px solid var(--line); border-right:none; background:rgba(14,20,34,.7);
+  color:var(--mut); font-family:var(--mono); font-size:10px; letter-spacing:.16em; padding:12px 5px;
+  border-radius:8px 0 0 8px; cursor:pointer; backdrop-filter:blur(6px);}
+#elemTab:hover{color:var(--truth); border-color:var(--truth);}
+#elemPanel{position:fixed; top:57px; right:0; height:calc(100% - 57px); width:340px; z-index:50;
+  background:rgba(12,17,28,.62); backdrop-filter:blur(16px) saturate(1.2); -webkit-backdrop-filter:blur(16px);
+  border-left:1px solid var(--line); box-shadow:-18px 0 40px rgba(0,0,0,.45);
+  transform:translateX(100%); transition:transform .32s cubic-bezier(.4,0,.2,1); overflow-y:auto;}
+#elemPanel.open{transform:translateX(0);}
+.ep-head{display:flex; justify-content:space-between; align-items:center; padding:13px 15px;
+  font-family:var(--mono); font-size:11px; letter-spacing:.12em; color:var(--txt);
+  border-bottom:1px solid var(--line); position:sticky; top:0; background:rgba(12,17,28,.55); backdrop-filter:blur(8px);}
+#elemClose{cursor:pointer; color:var(--mut);} #elemClose:hover{color:var(--bad);}
+.ep-body{padding:12px 14px; font-family:var(--mono); font-size:11.5px;}
+.ep-sec{font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ref); margin:14px 0 6px;}
+.ep-row{display:grid; grid-template-columns:30px 1fr 1fr; gap:6px; padding:2.5px 0; align-items:baseline;}
+.ep-row .k{color:var(--mut);} .ep-row .t{color:var(--truth); text-align:right;} .ep-row .e{color:var(--est); text-align:right;}
+.ep-row.hdr .t,.ep-row.hdr .e{font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--mut);}
+.ep-row .e.diff{color:var(--ref);} .ep-row .e.bigdiff{color:var(--bad);}
+/* ---------- 2D / 3D view toggle ---------- */
+#viewToggle{position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:4; display:flex;
+  border:1px solid var(--line); border-radius:8px; overflow:hidden; background:rgba(14,20,34,.6); backdrop-filter:blur(6px);}
+#viewToggle .vbtn{border:none; background:transparent; color:var(--mut); font-family:var(--mono); font-size:11px;
+  letter-spacing:.12em; padding:5px 16px; cursor:pointer; transition:all .15s;}
+#viewToggle .vbtn:hover{color:var(--txt);}
+#viewToggle .vbtn.sel{background:var(--ref); color:var(--bg); font-weight:600;}
+/* ---------- telemetry ticker (transparent terminal overlay on the orbit view) ---------- */
+#ticker{position:absolute; left:0; right:232px; bottom:6px; z-index:3; height:78px; pointer-events:none;}
+#ticker::before{content:"TELEMETRY"; position:absolute; top:-13px; left:12px;
+  font-family:var(--mono); font-size:8.5px; letter-spacing:.2em; color:#3A4663;}
+#tickerBody{height:100%; overflow:hidden; padding:0 12px; font-family:var(--mono); font-size:11px; line-height:1.5;
+  display:flex; flex-direction:column; justify-content:flex-end;
+  -webkit-mask-image:linear-gradient(to bottom, transparent, #000 30%); mask-image:linear-gradient(to bottom, transparent, #000 30%);}
+#tickerBody div{white-space:pre-wrap; word-break:break-word; text-shadow:0 0 5px #000,0 0 3px #000;}
+.tk-info{color:#8FD3E8;} .tk-ok{color:var(--ok);} .tk-warn{color:var(--ref);} .tk-err{color:var(--bad);} .tk-dim{color:#6A748E;}
+@media (max-width:880px){ #clocks{display:none;} #ticker{right:0; height:60px;} #elemPanel{width:88%;} }
+</style>
+</head>
+<body>
+<div id="boot">
+  <div class="bootInner">
+    <div class="bootMark"></div>
+    <div class="bootTitle">OD CONSOLE</div>
+    <div class="bootSub">orbit determination · initializing</div>
+    <div class="bootBarWrap"><div class="bootBar" id="bootBar"></div></div>
+    <div class="bootPct" id="bootPct">0%</div>
+  </div>
+</div>
+
+<header>
+  <div class="brand">OD CONSOLE<small>batch &amp; sequential estimation · 3D tactical display</small></div>
+  <div class="chips" id="chips"></div>
+  <div id="clocks" title="Mission epoch &amp; atomic time (live)">
+    <span class="liveDot" id="liveDot"></span>
+    <div class="clk"><span class="clk-l">UTC</span><span class="clk-v" id="ckUTC">—</span></div>
+    <div class="clk"><span class="clk-l">GPS</span><span class="clk-v" id="ckGPS">—</span></div>
+    <div class="clk"><span class="clk-l">JD</span><span class="clk-v" id="ckJD">—</span></div>
+  </div>
+  <button id="muteBtn" title="Toggle sound">🔊</button>
+  <button id="restart" title="Restart the whole exercise">↺ Restart</button>
+</header>
+
+<main>
+  <section id="left"><div id="stepContent"></div></section>
+  <section id="right">
+    <div id="vizWrap">
+      <canvas id="orbit"></canvas>
+      <div id="earth3d"></div>
+      <div id="viewToggle"><button class="vbtn sel" data-v="2d">2D</button><button class="vbtn" data-v="3d">3D</button></div>
+      <div id="vizTag">TACTICAL DISPLAY · two-body · Earth-centred inertial</div>
+      <div id="legend">
+        <div><span class="sw" style="border-color:var(--truth)"></span>true orbit X(t)</div>
+        <div><span class="sw dash" style="border-color:var(--ref)"></span>reference X<sup>*</sup>(t)</div>
+        <div><span class="sw" style="border-color:var(--est)"></span>estimate X̂(t)</div>
+        <div><span class="sw" style="border-color:var(--station); border-top-width:5px; width:9px;"></span>ground station</div>
+      </div>
+      <div id="ticker"><div id="tickerBody"></div></div>
+      <canvas id="gtrack" title="Ground track · Mercator"></canvas>
+      <button id="elemTab" title="Orbital elements &amp; state vector">◀ ELEMENTS</button>
+    </div>
+    <div id="resultsWrap">
+      <div id="plotBox"><canvas id="plot"></canvas></div>
+      <div id="readout"><span class="lbl">telemetry —\nawaiting first action…</span></div>
+    </div>
+  </section>
+</main>
+
+<aside id="elemPanel">
+  <div class="ep-head">STATE VECTOR &amp; ORBITAL ELEMENTS<span id="elemClose">✕</span></div>
+  <div class="ep-body" id="elemBody"></div>
+</aside>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+/* ============================================================
+   MATH UTILITIES — 4x4 row-major flat arrays
+============================================================ */
+function mmul4(A,B){const C=new Array(16).fill(0);
+  for(let r=0;r<4;r++)for(let c=0;c<4;c++){let s=0;
+    for(let k=0;k<4;k++)s+=A[4*r+k]*B[4*k+c]; C[4*r+c]=s;} return C;}
+function solveN(Ain,bin){ // Gaussian elimination w/ partial pivoting, n<=4
+  const n=bin.length, A=Ain.map(r=>r.slice()), b=bin.slice();
+  for(let i=0;i<n;i++){
+    let p=i; for(let r=i+1;r<n;r++) if(Math.abs(A[r][i])>Math.abs(A[p][i]))p=r;
+    if(Math.abs(A[p][i])<1e-14) return null;
+    [A[i],A[p]]=[A[p],A[i]]; [b[i],b[p]]=[b[p],b[i]];
+    for(let r=i+1;r<n;r++){const f=A[r][i]/A[i][i];
+      for(let c=i;c<n;c++)A[r][c]-=f*A[i][c]; b[r]-=f*b[i];}
+  }
+  const x=new Array(n).fill(0);
+  for(let i=n-1;i>=0;i--){let s=b[i];
+    for(let c=i+1;c<n;c++)s-=A[i][c]*x[c]; x[i]=s/A[i][i];}
+  return x;
+}
+function invN(Ain){ const n=Ain.length, I=[];
+  for(let i=0;i<n;i++){const e=new Array(n).fill(0); e[i]=1;
+    const col=solveN(Ain,e); if(!col)return null; I.push(col);}
+  // columns -> matrix
+  const M=[]; for(let r=0;r<n;r++){M.push([]); for(let c=0;c<n;c++)M[r][c]=I[c][r];}
+  return M;
+}
+/* --- dense 4×4 / vector helpers used by the Kalman path & covariance analysis --- */
+function mat4(flat){const M=[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
+  for(let r=0;r<4;r++)for(let c=0;c<4;c++)M[r][c]=flat[4*r+c]; return M;}        // row-major flat → 2D
+function mvmul(M,v){return M.map(row=>row.reduce((s,a,i)=>s+a*v[i],0));}          // M·v
+function mmulA(A,B){const C=[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
+  for(let r=0;r<4;r++)for(let c=0;c<4;c++){let s=0;for(let k=0;k<4;k++)s+=A[r][k]*B[k][c];C[r][c]=s;} return C;}
+function transpose4(A){const T=[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
+  for(let r=0;r<4;r++)for(let c=0;c<4;c++)T[r][c]=A[c][r]; return T;}
+function detN(A){const n=A.length, M=A.map(r=>r.slice()); let det=1;        // determinant via LU
+  for(let i=0;i<n;i++){let p=i; for(let r=i+1;r<n;r++) if(Math.abs(M[r][i])>Math.abs(M[p][i]))p=r;
+    if(Math.abs(M[p][i])<1e-300)return 0; if(p!==i){[M[i],M[p]]=[M[p],M[i]]; det=-det;}
+    det*=M[i][i]; for(let r=i+1;r<n;r++){const f=M[r][i]/M[i][i]; for(let c=i;c<n;c++)M[r][c]-=f*M[i][c];}}
+  return det;}
+function powerEig(M){let v=[1,1,1,1];                                        // dominant |eigenvalue| (power iter.)
+  for(let it=0;it<300;it++){const w=mvmul(M,v); const nrm=Math.hypot(...w)||1; v=w.map(x=>x/nrm);}
+  const Mv=mvmul(M,v); return Math.abs(Mv.reduce((s,x,i)=>s+x*v[i],0));}
+function condNum(Lam){const P=invN(Lam); if(!P)return Infinity;             // κ(Λ)=λmax(Λ)·λmax(Λ⁻¹)
+  return powerEig(Lam)*powerEig(P);}
+/* closed display orbit — integrate over the body's OWN period (from vis-viva) so the
+   drawn ellipse always connects, even when the guess has a different period than truth */
+function orbitPeriod(X0){const r=Math.hypot(X0[0],X0[1]), a=1/(2/r-(X0[2]*X0[2]+X0[3]*X0[3]));
+  return a>0?2*Math.PI*Math.pow(a,1.5):T_ORB;}
+function orbitPath(X0){
+  const T=orbitPeriod(X0), h=0.012; let z=[X0[0],X0[1],X0[2],X0[3]], t=0; const path=[[z[0],z[1]]];
+  const d4=s=>{const x=s[0],y=s[1],r3=Math.pow(x*x+y*y,1.5);return[s[2],s[3],-x/r3,-y/r3];};
+  const step=(s,hh)=>{const k1=d4(s),a=s.map((v,i)=>v+0.5*hh*k1[i]),k2=d4(a),
+    b=s.map((v,i)=>v+0.5*hh*k2[i]),k3=d4(b),cc=s.map((v,i)=>v+hh*k3[i]),k4=d4(cc);
+    return s.map((v,i)=>v+hh/6*(k1[i]+2*k2[i]+2*k3[i]+k4[i]));};
+  while(t<T-1e-9){const hh=Math.min(h,T-t); z=step(z,hh); t+=hh; path.push([z[0],z[1]]);}
+  path.push(path[0].slice());   // close the loop exactly
+  return path;
+}
+/* PRNG (mulberry32) + gaussian */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;
+  let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t;
+  return ((t^t>>>14)>>>0)/4294967296;};}
+function gaussPair(rng){const u=Math.max(rng(),1e-12),v=rng();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+
+/* ============================================================
+   DYNAMICS — two-body + STM (Φ̇ = AΦ), 20-dim RK4
+============================================================ */
+function deriv(z){
+  const x=z[0],y=z[1],vx=z[2],vy=z[3];
+  const r2=x*x+y*y, r=Math.sqrt(r2), r3=r2*r, r5=r3*r2;
+  const d=new Array(20);
+  d[0]=vx; d[1]=vy; d[2]=-x/r3; d[3]=-y/r3;
+  // A matrix (μ=1)
+  const a31=-1/r3+3*x*x/r5, a32=3*x*y/r5, a41=a32, a42=-1/r3+3*y*y/r5;
+  // dΦ = A·Φ  (Φ row-major at z[4..19])
+  for(let c=0;c<4;c++){
+    const p0=z[4+c], p1=z[8+c], p2=z[12+c], p3=z[16+c];
+    d[4+c]  = p2;                 // row0 of A = [0 0 1 0]
+    d[8+c]  = p3;                 // row1 = [0 0 0 1]
+    d[12+c] = a31*p0 + a32*p1;    // row2
+    d[16+c] = a41*p0 + a42*p1;    // row3
+  }
+  return d;
+}
+function rk4(z,h){
+  const k1=deriv(z);
+  const z2=z.map((v,i)=>v+0.5*h*k1[i]); const k2=deriv(z2);
+  const z3=z.map((v,i)=>v+0.5*h*k2[i]); const k3=deriv(z3);
+  const z4=z.map((v,i)=>v+h*k3[i]);     const k4=deriv(z4);
+  return z.map((v,i)=>v+h/6*(k1[i]+2*k2[i]+2*k3[i]+k4[i]));
+}
+function propagate(X0,tSamples){
+  let z=[X0[0],X0[1],X0[2],X0[3], 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
+  let t=0; const h0=0.012;
+  const path=[[z[0],z[1]]], pathT=[0], samples=[];
+  for(const ts of tSamples){
+    while(t<ts-1e-12){
+      const h=Math.min(h0,ts-t); z=rk4(z,h); t+=h;
+      path.push([z[0],z[1]]); pathT.push(t);
+    }
+    samples.push({t:ts, X:z.slice(0,4), Phi:z.slice(4)});
+  }
+  return {path,pathT,samples};
+}
+
+/* ============================================================
+   SCENARIO
+============================================================ */
+const MU=1;
+const PLANET_R=0.28;
+const STA=[PLANET_R*Math.cos(-0.5), PLANET_R*Math.sin(-0.5)]; // off-axis → observable
+const X_TRUE=[1.00, 0.00, 0.00, 1.05];
+const aSMA=1/(2/1.0-1.05*1.05);                  // vis-viva
+const T_ORB=2*Math.PI*Math.pow(aSMA,1.5);
+const N_OBS=28;
+const T_OBS=Array.from({length:N_OBS},(_,i)=>T_ORB*(i+1)/N_OBS);
+
+const NOISE={low:{s:0.0008,lab:"σ = 8·10⁻⁴"}, med:{s:0.004,lab:"σ = 4·10⁻³"}, high:{s:0.015,lab:"σ = 1.5·10⁻²"}};
+const GUESS={
+  close:{d:[ 0.020,-0.015, 0.012,-0.014], lab:"≈ 2–3 % off"},
+  med:  {d:[ 0.055,-0.045, 0.032,-0.040], lab:"≈ 6–8 % off"},
+  far:  {d:[ 0.110,-0.090, 0.060,-0.075], lab:"≈ 12–15 % off"},
+};
+const PRIOR_INV=1e-2;     // weak a priori Λ₀ = 0.01·I (σ_ap = 10)
+const EPS_CONV=1e-8, MAX_IT=12;
+const RHO_AR=0.85;        // AR(1) correlation coefficient for coloured noise
+/* a priori covariance presets — diagonal P̄₀ over [x y ẋ ẏ] */
+const PRIORS={
+  weak:   {diag:[1e2, 1e2, 1e2, 1e2],    lab:"σ_ap ≈ 10"},      // P̄₀⁻¹ = 1e-2 (legacy weak prior)
+  nominal:{diag:[1.0, 1.0, 1e-2, 1e-2],  lab:"σ_ap ≈ 1 / 0.1"},
+  tight:  {diag:[1e-2,1e-2,1e-4,1e-4],   lab:"σ_ap ≈ 0.1 / 0.01"},
+};
+
+const rho =X=>Math.hypot(X[0]-STA[0],X[1]-STA[1]);
+const Htil=X=>{const r=rho(X);return[(X[0]-STA[0])/r,(X[1]-STA[1])/r,0,0];};
+
+/* ============================================================
+   APP STATE
+============================================================ */
+let S;
+function freshState(){
+  S={step:0, maxStep:0, done:[false,false,false,false,false,false,false,false],
+     noiseKey:null, guessKey:null, guessMethod:null, sigma:null, rng:null,
+     noiseMode:'white', whiten:false, R:null,
+     filterType:'wls_ap', priorType:'weak',           // default ≡ legacy weak-prior WLS
+     priorCustom:{sx:1, sy:1, svx:0.1, svy:0.1, off:0},// custom σ_ap (linear) + x̄₀ offset
+     Pbar0:null, xbar0:null,                           // a priori covariance diag + deviation
+     truth:null, rhoObs:null,
+     Xref0:null, ref:null, ghosts:[],
+     resid:null, Lam:null, Nv:null, xhat:null, P:null,
+     iters:[], converged:false, diverged:false,
+     anim:null, rafId:null, stmManual:null};
+}
+freshState();
+
+/* ============================================================
+   CANVAS SETUP
+============================================================ */
+const cvO=document.getElementById('orbit'), cxO=cvO.getContext('2d');
+const cvP=document.getElementById('plot'),  cxP=cvP.getContext('2d');
+let _dpr=window.devicePixelRatio||1;
+const bgCanvas=document.createElement('canvas'); let bgReady=false;   // offscreen backdrop (stars/halo/vignette)
+let EARTH3D_ON=false;   // true once the Three.js Earth is live → the 2D layer renders transparently over it
+function fit(cv){const r=cv.getBoundingClientRect(),d=window.devicePixelRatio||1; _dpr=d;
+  cv.width=Math.max(2,r.width*d); cv.height=Math.max(2,r.height*d);
+  cv.getContext('2d').setTransform(d,0,0,d,0,0); return r;}
+let RO=fit(cvO), RP=fit(cvP);
+new ResizeObserver(()=>{RO=fit(cvO);RP=fit(cvP);bgReady=false;draw();}).observe(cvO); // rebuild backdrop on resize
+new ResizeObserver(()=>{RO=fit(cvO);RP=fit(cvP);draw();}).observe(cvP);
+
+const HALF=1.75;
+function w2c(p){const w=RO.width,h=RO.height,s=Math.min(w,h)/(2*HALF*1.04);
+  return [w/2+p[0]*s, h/2-p[1]*s];}
+function scl(){return Math.min(RO.width,RO.height)/(2*HALF*1.04);}
+
+/* ============================================================
+   DRAWING — tracking display
+============================================================ */
+/* seeded starfield — stable layout across restarts; ~150 stars, 3 brightness tiers */
+const STAR_ALPHA=[0.25,0.5,0.9];
+const STARS=(function(){
+  const rng=mulberry32(0x5EED), arr=[];
+  for(let i=0;i<150;i++){const t=rng();
+    arr.push({fx:rng(), fy:rng(), tier:(t<0.6?0:t<0.88?1:2), tw:false, ph:rng()*6.283});}
+  const r2=mulberry32(0xC0FFEE);                       // promote ~12 of them to twinklers
+  for(let i=0;i<12;i++){arr[(r2()*arr.length)|0].tw=true;}
+  return arr;
+})();
+/* ---- offscreen backdrop: rebuilt only on resize, blitted each frame ---- */
+function buildBackdrop(){
+  bgCanvas.width=cvO.width; bgCanvas.height=cvO.height;
+  const b=bgCanvas.getContext('2d'); b.setTransform(_dpr,0,0,_dpr,0,0);
+  b.clearRect(0,0,RO.width,RO.height);
+  if(EARTH3D_ON){                       // 3D scene draws the Earth + stars behind → keep 2D layer transparent
+    drawGraticuleOn(b); drawStationOn(b); bgReady=true; return;
+  }
+  b.fillStyle=getCSS('--txt');                         // static stars (twinklers drawn live)
+  for(const s of STARS){ if(s.tw)continue;
+    b.globalAlpha=STAR_ALPHA[s.tier];
+    b.beginPath(); b.arc(s.fx*RO.width, s.fy*RO.height, s.tier?1.1:0.7, 0, 6.283); b.fill(); }
+  b.globalAlpha=1;
+  drawGraticuleOn(b);   // very faint rings + spokes (must not compete with the orbit)
+  drawPlanetOn(b);      // planet body + atmospheric halo + ground station
+  drawVignetteOn(b);    // soft edge darkening
+  bgReady=true;
+}
+function drawStationOn(c){
+  const [sx,sy]=w2c(STA); c.fillStyle=getCSS('--station');
+  c.beginPath(); c.moveTo(sx,sy-6); c.lineTo(sx-5.5,sy+4.5); c.lineTo(sx+5.5,sy+4.5); c.closePath(); c.fill();
+  c.font="10px "+getCSS('--mono'); c.fillStyle="#C9B065"; c.fillText("GS",sx+8,sy+4);
+}
+function drawGraticuleOn(c){
+  c.save(); const [cx,cy]=w2c([0,0]);
+  c.strokeStyle="#121826"; c.lineWidth=1;              // faint range rings
+  for(let r=0.5;r<=2.0;r+=0.5){ c.beginPath(); c.arc(cx,cy,r*scl(),0,6.283); c.stroke(); }
+  c.strokeStyle="#0F1622";                             // even fainter spokes
+  for(let a=0;a<12;a++){const th=a*Math.PI/6;
+    c.beginPath(); c.moveTo(...w2c([0.32*Math.cos(th),0.32*Math.sin(th)]));
+    c.lineTo(...w2c([2.0*Math.cos(th),2.0*Math.sin(th)])); c.stroke();}
+  c.restore();
+}
+/* layered "blue-marble" Earth: depth-varied ocean, smooth stylised continents, deserts,
+   a cloud layer, polar ice, spherical shading, day/night terminator and an atmosphere limb.
+   Fully procedural (no external assets); drawn once into the static offscreen backdrop. */
+function drawPlanetOn(c){
+  const [cx,cy]=w2c([0,0]), r=PLANET_R*scl();
+  // atmosphere limb glow
+  const halo=c.createRadialGradient(cx,cy,r*0.96,cx,cy,r*1.30);
+  halo.addColorStop(0,"rgba(120,180,255,0)"); halo.addColorStop(0.40,"rgba(120,180,255,0.22)"); halo.addColorStop(1,"rgba(120,180,255,0)");
+  c.fillStyle=halo; c.beginPath(); c.arc(cx,cy,r*1.30,0,6.283); c.fill();
+  c.save(); c.beginPath(); c.arc(cx,cy,r,0,6.283); c.clip();
+  // deep ocean
+  const oc=c.createRadialGradient(cx-r*0.30,cy-r*0.35,r*0.10,cx,cy,r*1.2);
+  oc.addColorStop(0,"#2E78C2"); oc.addColorStop(0.5,"#15538F"); oc.addColorStop(1,"#072043");
+  c.fillStyle=oc; c.fillRect(cx-r,cy-r,2*r,2*r);
+  // smooth closed blob through hull points given in disk coords (u,v ∈ [-1,1])
+  const blob=(pts,fill,alpha)=>{ c.globalAlpha=alpha??1; c.fillStyle=fill;
+    const P=pts.map(p=>[cx+p[0]*r,cy+p[1]*r]); c.beginPath();
+    c.moveTo((P[0][0]+P[P.length-1][0])/2,(P[0][1]+P[P.length-1][1])/2);
+    for(let i=0;i<P.length;i++){const a=P[i],b=P[(i+1)%P.length]; c.quadraticCurveTo(a[0],a[1],(a[0]+b[0])/2,(a[1]+b[1])/2);}
+    c.closePath(); c.fill(); c.globalAlpha=1; };
+  // stylised landmasses (read as continents; not geographically exact)
+  blob([[-0.62,-0.5],[-0.4,-0.72],[-0.16,-0.55],[-0.22,-0.12],[-0.45,0.04],[-0.66,-0.2]],"#3f7d4a");
+  blob([[-0.5,0.12],[-0.3,0.02],[-0.18,0.28],[-0.3,0.64],[-0.52,0.5]],"#4a8a4f");
+  blob([[0.04,-0.62],[0.42,-0.64],[0.58,-0.3],[0.36,-0.04],[0.12,-0.2],[-0.02,-0.46]],"#5b8b46");
+  blob([[0.12,0.06],[0.34,-0.02],[0.48,0.22],[0.32,0.52],[0.08,0.42]],"#6e8a45");
+  blob([[0.5,0.42],[0.68,0.36],[0.66,0.57],[0.46,0.58]],"#7a7d44");
+  blob([[0.2,-0.42],[0.4,-0.44],[0.36,-0.22],[0.16,-0.24]],"#b59a5e",0.5);   // desert accent
+  // cloud layer (soft white swirls)
+  const rng=mulberry32(7);
+  for(let i=0;i<11;i++){const a=rng()*6.283, rad=rng()*r*0.85, lx=cx+Math.cos(a)*rad, ly=cy+Math.sin(a)*rad, cr=r*(0.14+rng()*0.2);
+    const cg=c.createRadialGradient(lx,ly,0,lx,ly,cr);
+    cg.addColorStop(0,"rgba(255,255,255,0.34)"); cg.addColorStop(1,"rgba(255,255,255,0)");
+    c.fillStyle=cg; c.beginPath(); c.arc(lx,ly,cr,0,6.283); c.fill();}
+  // polar ice
+  c.fillStyle="rgba(232,240,252,0.92)";
+  c.beginPath(); c.ellipse(cx,cy-r*0.92,r*0.62,r*0.24,0,0,6.283); c.fill();
+  c.beginPath(); c.ellipse(cx,cy+r*0.92,r*0.75,r*0.28,0,0,6.283); c.fill();
+  // spherical shading: day highlight upper-left, limb darkening
+  const sph=c.createRadialGradient(cx-r*0.38,cy-r*0.42,r*0.1,cx,cy,r*1.02);
+  sph.addColorStop(0,"rgba(255,255,255,0.12)"); sph.addColorStop(0.55,"rgba(0,0,0,0)"); sph.addColorStop(1,"rgba(0,8,22,0.55)");
+  c.fillStyle=sph; c.fillRect(cx-r,cy-r,2*r,2*r);
+  // night-side terminator
+  const sh=c.createRadialGradient(cx-r*0.5,cy-r*0.5,r*0.1,cx+r*0.35,cy+r*0.35,r*1.5);
+  sh.addColorStop(0,"rgba(2,6,16,0)"); sh.addColorStop(0.7,"rgba(2,6,16,0.25)"); sh.addColorStop(1,"rgba(2,6,16,0.78)");
+  c.fillStyle=sh; c.fillRect(cx-r,cy-r,2*r,2*r);
+  c.restore();
+  c.strokeStyle="rgba(150,200,255,0.55)"; c.lineWidth=1.4; c.beginPath(); c.arc(cx,cy,r*0.99,0,6.283); c.stroke();
+  const [sx,sy]=w2c(STA); c.fillStyle=getCSS('--station');        // ground station marker
+  c.beginPath(); c.moveTo(sx,sy-6); c.lineTo(sx-5.5,sy+4.5); c.lineTo(sx+5.5,sy+4.5); c.closePath(); c.fill();
+  c.font="10px "+getCSS('--mono'); c.fillStyle="#C9B065"; c.fillText("GS",sx+8,sy+4);
+}
+function drawVignetteOn(c){
+  const w=RO.width,h=RO.height;
+  const g=c.createRadialGradient(w/2,h/2,Math.min(w,h)*0.36, w/2,h/2,Math.max(w,h)*0.62);
+  g.addColorStop(0,"rgba(10,14,26,0)"); g.addColorStop(1,"rgba(10,14,26,0.55)");   // --bg edges
+  c.fillStyle=g; c.fillRect(0,0,w,h);
+}
+/* live twinklers — slow 0.3 Hz alpha pulse, composited over the backdrop each frame */
+function drawTwinklers(ts){
+  const c=cxO; c.save(); c.fillStyle=getCSS('--txt');
+  for(const s of STARS){ if(!s.tw)continue;
+    const a=0.55+0.35*Math.sin(2*Math.PI*0.3*ts/1000 + s.ph);
+    c.globalAlpha=Math.max(0,Math.min(1,a));
+    c.beginPath(); c.arc(s.fx*RO.width, s.fy*RO.height, 1.25, 0, 6.283); c.fill(); }
+  c.restore();
+}
+function drawPath(path,color,dash,alpha,frac){
+  if(!path||path.length<2)return;
+  const c=cxO; c.save(); c.globalAlpha=alpha??1;
+  c.strokeStyle=color; c.lineWidth=2.1; c.setLineDash(dash||[]);
+  const n=Math.max(2,Math.floor(path.length*(frac??1)));
+  c.beginPath(); c.moveTo(...w2c(path[0]));
+  for(let i=1;i<n;i++)c.lineTo(...w2c(path[i]));
+  c.stroke(); c.restore();
+}
+function dot(p,color,r){const c=cxO,[x,y]=w2c(p);
+  c.fillStyle=color; c.beginPath(); c.arc(x,y,r||3,0,2*Math.PI); c.fill();}
+const _cssCache={};   // CSS custom properties are static → memoize (hot path at 60 fps)
+function getCSS(v){return _cssCache[v]!==undefined?_cssCache[v]
+  :(_cssCache[v]=getComputedStyle(document.documentElement).getPropertyValue(v).trim());}
+
+/* stop any in-flight animation: drop the descriptor AND kill the RAF loop */
+function cancelAnim(){
+  if(S.rafId){cancelAnimationFrame(S.rafId); S.rafId=null;}
+  S.anim=null;
+  S.stmManual=null;   // clear any manual Φ scrub so steps never reopen on a half-drawn orbit
+}
+/* manual Φ scrub (Step 3): slider 0..1 drives the same fraction draw() uses */
+function scrubPhi(v){
+  if(!S.ref)return;
+  cancelAnim(); S.stmManual=v;                 // cancelAnim clears stmManual, so set it after
+  const k=Math.min(S.ref.samples.length-1,Math.round(v*(S.ref.samples.length-1)));
+  showPhi(S.ref.samples[k]);
+  if(v>=0.999&&!S.done[2]){                     // scrubbing to the end also completes the STM step
+    S.done[2]=true; S.stmManual=null; renderPanel(); draw(); return; // → reveals the Continue button
+  }
+  draw();
+}
+
+/* advance the live tracking pass: genuinely integrate truth forward in animation
+   time (RK4 one chunk per frame), accumulating a comet tail and station pings */
+function stepLive(A,ts){
+  const frac=Math.min(1,(ts-A.t0)/A.dur), targetT=frac*T_ORB; let guard=0;
+  while(A.simT<targetT-1e-9 && guard++<4000){
+    const h=Math.min(0.012,targetT-A.simT); A.z=rk4(A.z,h); A.simT+=h; A.tail.push([A.z[0],A.z[1]]);
+  }
+  while(A.k<T_OBS.length && A.simT>=T_OBS[A.k]-1e-9){ A.pulses.push({t0:ts,p:[A.z[0],A.z[1]]}); A.k++; }
+  return frac;
+}
+function drawLive(A,ts){
+  const c=cxO, tail=A.tail, n=tail.length, T=getCSS('--truth');
+  if(n>1){                                   // comet tail — alpha bands give a cheap fade
+    c.save(); c.strokeStyle=T; c.lineWidth=2;
+    for(const [sf,al] of [[0,0.10],[0.55,0.30],[0.85,0.75]]){
+      const s0=Math.max(1,Math.floor(n*sf)); c.globalAlpha=al;
+      c.beginPath(); c.moveTo(...w2c(tail[s0-1])); for(let i=s0;i<n;i++)c.lineTo(...w2c(tail[i])); c.stroke();
+    } c.restore();
+  }
+  for(let i=0;i<A.k;i++){const s=S.truth&&S.truth.samples[i]; if(s)dot([s.X[0],s.X[1]],T,2.6);} // recorded pings
+  A.pulses=A.pulses.filter(pl=>ts-pl.t0<450);                                                   // station pulse lines
+  for(const pl of A.pulses){const a=1-(ts-pl.t0)/450;
+    c.save(); c.globalAlpha=0.8*a; c.strokeStyle=getCSS('--station'); c.lineWidth=1.4; c.setLineDash([3,4]);
+    c.beginPath(); c.moveTo(...w2c(STA)); c.lineTo(...w2c(pl.p)); c.stroke(); c.restore();}
+  const hp=tail[n-1], [hx,hy]=w2c(hp);                                                          // glowing head
+  const gr=c.createRadialGradient(hx,hy,0,hx,hy,9);
+  gr.addColorStop(0,T); gr.addColorStop(0.4,"rgba(69,214,196,0.55)"); gr.addColorStop(1,"rgba(69,214,196,0)");
+  c.save(); c.fillStyle=gr; c.beginPath(); c.arc(hx,hy,9,0,6.283); c.fill(); c.restore();
+  dot(hp,T,2.6);
+}
+function draw(ts){
+  ts=performance.now();                 // single clock for all animations (avoids rAF-timestamp origin mismatch)
+  const c=cxO;
+  if(!RO||!RO.width) RO=fit(cvO);        // self-heal if the canvas was measured before layout settled
+  if(!bgReady) buildBackdrop();
+  c.setTransform(1,0,0,1,0,0); c.clearRect(0,0,cvO.width,cvO.height); c.drawImage(bgCanvas,0,0); // blit backdrop 1:1
+  c.setTransform(_dpr,0,0,_dpr,0,0);                                                              // back to CSS coords
+  drawTwinklers(ts);
+  const A=S.anim;
+  // ghosts (older iterations) — hidden once converged so the final estimate sits cleanly on truth
+  if(!S.converged) S.ghosts.forEach((g,i)=>{const a=0.10+0.10*i/Math.max(1,S.ghosts.length-1); drawPath(g,"#6E7891",[5,5],a);});
+  // ---- truth: live tracking pass, or static once recorded ----
+  let live=null;
+  if(A&&A.type==='live'){ const frac=stepLive(A,ts); live=A; if(frac>=1){S.anim=null; A.onDone&&A.onDone();} }
+  if(live){ drawLive(live,ts); }
+  else if(S.truth){
+    drawPath(S.truth.path,getCSS('--truth'),null,0.95,1);
+    if(S.rhoObs) S.truth.samples.forEach(s=>dot([s.X[0],s.X[1]],getCSS('--truth'),2.6));
+    dot([X_TRUE[0],X_TRUE[1]],getCSS('--truth'),3.5);
+  }
+  // ---- reference ----
+  let refFrac=1;
+  if(A&&(A.type==='ref'||A.type==='stm')){const p=Math.min(1,(ts-A.t0)/A.dur);
+    refFrac=p; if(A.type==='stm'&&S.ref){const k=Math.min(S.ref.samples.length-1,Math.floor(p*S.ref.samples.length)); showPhi(S.ref.samples[k]);}
+    if(p>=1){S.anim=null; A.onDone&&A.onDone();}}
+  else if(S.step===2&&S.stmManual!=null&&S.ref){ refFrac=S.stmManual; }
+  if(S.ref){
+    const col=S.converged?getCSS('--est'):getCSS('--ref');
+    // once converged X̂≈X, so the estimate ring overlays the true ring exactly (the residual
+    // along the weakly-observed direction is reported by the covariance ellipse + readout instead)
+    const orbitPathToDraw=(S.converged&&S.truth&&S.truth.path)?S.truth.path:S.ref.path;
+    drawPath(orbitPathToDraw,col,S.converged?null:[7,6],1,refFrac);
+    if(refFrac>=1){const p0=[S.Xref0[0],S.Xref0[1]]; dot(p0,col,4);
+      c.save(); c.strokeStyle=col; c.lineWidth=1.4; const[x,y]=w2c(p0); c.beginPath(); c.arc(x,y,8,0,6.283); c.stroke(); c.restore();}
+    if(refFrac<1&&((A&&A.type==='stm')||(S.step===2&&S.stmManual!=null))){
+      const idx=Math.min(S.ref.path.length-1,Math.floor(S.ref.path.length*refFrac)); dot(S.ref.path[idx],getCSS('--ref'),4);}
+  }
+  // correction arrow (step 5)
+  if(S.xhat&&S.step===5&&S.Xref0){
+    const sc=18, p0=[S.Xref0[0],S.Xref0[1]], p1=[p0[0]+S.xhat[0]*sc,p0[1]+S.xhat[1]*sc];
+    arrow(p0,p1,getCSS('--est')); c.fillStyle=getCSS('--est'); c.font="10.5px "+getCSS('--mono');
+    const [tx,tyy]=w2c(p1); c.fillText("x̂₀ (×"+sc+")",tx+6,tyy-4);
+  }
+  // covariance ellipse(s) on final step
+  if(S.step===7&&S.P&&S.converged) drawCovEllipse();
+}
+/* single persistent render loop, capped at 60 fps (drives twinkle + all animations) */
+let _loopId=null,_lastFrame=0;
+/* Persistent, self-healing render loop. Capped at ~60 fps via performance.now().
+   draw() is wrapped so a single bad frame can never kill the loop (which previously
+   left the scene frozen until a resize forced a one-off redraw). */
+function loop(){
+  const t=performance.now();
+  if(t-_lastFrame>=15){ _lastFrame=t; try{ draw(); }catch(e){ /* keep the loop alive */ }
+    if(typeof ODFrame==='function'){ try{ ODFrame(); }catch(e){} } }
+  _loopId=requestAnimationFrame(loop);
+}
+function arrow(p0,p1,col){
+  const c=cxO,[x0,y0]=w2c(p0),[x1,y1]=w2c(p1);
+  c.save(); c.strokeStyle=col; c.fillStyle=col; c.lineWidth=2;
+  c.beginPath(); c.moveTo(x0,y0); c.lineTo(x1,y1); c.stroke();
+  const a=Math.atan2(y1-y0,x1-x0);
+  c.beginPath(); c.moveTo(x1,y1);
+  c.lineTo(x1-9*Math.cos(a-0.42),y1-9*Math.sin(a-0.42));
+  c.lineTo(x1-9*Math.cos(a+0.42),y1-9*Math.sin(a+0.42));
+  c.closePath(); c.fill(); c.restore();
+}
+/* ellipse colour matches the estimator family */
+function filterColor(){const t=S.filterType;
+  if(t==='mve'||t==='mve_ap')return getCSS('--est');   // MVE family → blue
+  if(t==='kf'||t==='ekf')   return getCSS('--truth');  // Kalman family → teal
+  return getCSS('--ref');}                             // LS/WLS family → amber
+/* position-block 1σ ellipse(s). For a-priori filters we draw both the prior
+   (dashed) and the posterior (solid) so the data-driven shrinkage is visible. */
+function drawCovEllipse(){
+  const col=filterColor(), c=cxO, [cx,cy]=w2c([S.Xref0[0],S.Xref0[1]]);
+  const eig=(a,b,d)=>{const tr=a+d,det=a*d-b*b,disc=Math.sqrt(Math.max(0,tr*tr/4-det));
+    const l1=tr/2+disc,l2=tr/2-disc;
+    return {s1:Math.sqrt(Math.max(l1,0)),s2:Math.sqrt(Math.max(l2,0)),ang:Math.atan2(l1-a,b||1e-30)};};
+  const post=eig(S.P[0][0],S.P[0][1],S.P[1][1]);
+  const K=0.10/Math.max(post.s1,1e-12);                // shared visual scale (from posterior)
+  const ell=(e,dash)=>{c.save();c.translate(cx,cy);c.rotate(-e.ang);
+    c.strokeStyle=col;c.lineWidth=1.6;c.setLineDash(dash);
+    c.beginPath();c.ellipse(0,0,e.s1*K*scl(),e.s2*K*scl(),0,0,2*Math.PI);c.stroke();c.restore();};
+  ell(post,[]);                                        // posterior P (solid)
+  if(usesApriori()&&S.Pbar0){
+    ell(eig(S.Pbar0[0],0,S.Pbar0[1]),[4,4]);           // prior P̄₀ (dashed)
+    const trP=S.P[0][0]+S.P[1][1], trPb=S.Pbar0[0]+S.Pbar0[1];
+    const pct=Math.max(0,Math.min(100,Math.round((1-trP/trPb)*100)));
+    c.fillStyle=col; c.font="10px "+getCSS('--mono');
+    c.fillText("data tightened σ-area by "+pct+"%",cx+12,cy+16);
+  }
+  c.fillStyle=col; c.font="10.5px "+getCSS('--mono');
+  c.fillText("1σ ("+S.filterType+")",cx+12,cy-12);
+}
+
+/* ============================================================
+   PLOTS (bottom-left canvas)
+============================================================ */
+function clearPlot(msg){
+  cxP.clearRect(0,0,RP.width,RP.height);
+  if(msg){cxP.fillStyle="#5B6580"; cxP.font="12px "+getCSS('--sans');
+    cxP.fillText(msg,14,22);}
+}
+function filterLabel(){return 'filter: '+S.filterType+(usesApriori()?' | prior: '+S.priorType:'');}
+function plotSeries(opts){
+  const {pts,title,ylab,xlab,kind,hline,band,bandLabel,cornerText,overlay}=opts;
+  cxP.clearRect(0,0,RP.width,RP.height);
+  const mL=48,mR=14,mT=24,mB=30,W=RP.width-mL-mR,H=RP.height-mT-mB;
+  if(W<40||H<30||!pts.length)return;
+  let xmin=Math.min(...pts.map(p=>p[0])), xmax=Math.max(...pts.map(p=>p[0]));
+  let ymin=Math.min(...pts.map(p=>p[1])), ymax=Math.max(...pts.map(p=>p[1]));
+  if(hline!==undefined){ymin=Math.min(ymin,hline);ymax=Math.max(ymax,hline);}
+  if(band!==undefined){ymin=Math.min(ymin,-band);ymax=Math.max(ymax,band);}
+  if(ymax-ymin<1e-12){ymax+=1;ymin-=1;}
+  const pad=(ymax-ymin)*0.14; ymin-=pad; ymax+=pad;
+  const X=v=>mL+(v-xmin)/(xmax-xmin||1)*W;
+  const Y=v=>mT+H-(v-ymin)/(ymax-ymin)*H;
+  // ±band fill + dashed edges (e.g. ±σ around zero)
+  if(band!==undefined){const yhi=Y(band),ylo=Y(-band);
+    cxP.fillStyle="rgba(122,162,247,.10)"; cxP.fillRect(mL,yhi,W,ylo-yhi);
+    cxP.strokeStyle="rgba(122,162,247,.35)"; cxP.setLineDash([2,3]); cxP.lineWidth=1;
+    cxP.beginPath();cxP.moveTo(mL,yhi);cxP.lineTo(mL+W,yhi);cxP.moveTo(mL,ylo);cxP.lineTo(mL+W,ylo);cxP.stroke();
+    cxP.setLineDash([]);
+    if(bandLabel){cxP.fillStyle="#7AA2F7"; cxP.font="9px "+getCSS('--mono'); cxP.fillText(bandLabel,mL+W-20,yhi-3);}}
+  // frame + y grid/ticks
+  cxP.strokeStyle="#26304A"; cxP.lineWidth=1; cxP.strokeRect(mL,mT,W,H);
+  cxP.font="10px "+getCSS('--mono');
+  for(let i=0;i<=4;i++){const v=ymin+(ymax-ymin)*i/4, y=Y(v);
+    cxP.fillStyle="#7C87A2"; cxP.fillText(fm(v,2),4,y+3);
+    cxP.strokeStyle="#19202F"; cxP.beginPath();cxP.moveTo(mL,y);cxP.lineTo(mL+W,y);cxP.stroke();}
+  // x ticks (min / mid / max)
+  cxP.fillStyle="#7C87A2"; cxP.textAlign="center";
+  if(kind!=='bars') for(let i=0;i<=2;i++){const xv=xmin+(xmax-xmin)*i/2; cxP.fillText(fm(xv,1),X(xv),mT+H+13);}
+  cxP.textAlign="left";
+  if(xlab){cxP.fillStyle="#5B6580"; cxP.font="9px "+getCSS('--mono'); cxP.textAlign="right"; cxP.fillText(xlab,mL+W,mT+H+24); cxP.textAlign="left";}
+  cxP.fillStyle="#9AA4BE"; cxP.font="11px "+getCSS('--sans'); cxP.fillText(title,mL,14);
+  if(hline!==undefined){cxP.strokeStyle="#3A4663"; cxP.setLineDash([4,4]);
+    cxP.beginPath();cxP.moveTo(mL,Y(hline));cxP.lineTo(mL+W,Y(hline));cxP.stroke(); cxP.setLineDash([]);}
+  if(kind==='bars'){
+    const bw=Math.min(26,W/pts.length*0.55);
+    pts.forEach(p=>{cxP.fillStyle=getCSS('--ref'); cxP.fillRect(X(p[0])-bw/2,Y(p[1]),bw,(mT+H)-Y(p[1]));});
+    cxP.fillStyle="#7C87A2"; cxP.font="10px "+getCSS('--mono');
+    pts.forEach(p=>cxP.fillText(p[0],X(p[0])-3,mT+H+14));
+  }else{
+    if(kind==='line'){cxP.strokeStyle=opts.color||getCSS('--est'); cxP.lineWidth=1.8;
+      cxP.beginPath(); pts.forEach((p,i)=>i?cxP.lineTo(X(p[0]),Y(p[1])):cxP.moveTo(X(p[0]),Y(p[1]))); cxP.stroke();}
+    cxP.fillStyle=opts.color||getCSS('--truth');
+    pts.forEach(p=>{cxP.beginPath();cxP.arc(X(p[0]),Y(p[1]),kind==='line'?2.0:2.7,0,6.283);cxP.fill();});
+  }
+  cxP.fillStyle="#7C87A2"; cxP.font="10px "+getCSS('--mono'); cxP.fillText(ylab||"",mL+4,mT+12);
+  if(cornerText){cxP.fillStyle=getCSS('--ref'); cxP.font="10px "+getCSS('--mono');
+    cxP.textAlign="right"; cxP.fillText(cornerText,mL+W-2,mT+12); cxP.textAlign="left";}
+  if(overlay){cxP.fillStyle="#6E7891"; cxP.font="9.5px "+getCSS('--mono'); cxP.fillText(overlay,mL+4,mT+H-5);}
+}
+function fm(v,d){ // compact number
+  if(v===0)return "0";
+  const a=Math.abs(v);
+  if(a>=0.01&&a<1000)return v.toFixed(d??3);
+  return v.toExponential(1);
+}
+function fmt(v){return (v>=0?" ":"")+v.toFixed(5);}
+
+/* ============================================================
+   READOUT helpers
+============================================================ */
+const RD=document.getElementById('readout');
+let __lastReadout='';
+/* red banner shown whenever coloured noise is used without whitening */
+function noiseWarn(){
+  return (S.noiseMode==='coloured'&&!S.whiten)
+   ? `<div class="note warn">⚠ Coloured noise without whitening — wRMS will be biased, off-diagonal correlations ignored.</div>`
+   : '';
+}
+function showReadout(html){__lastReadout=html; RD.innerHTML=noiseWarn()+html;}
+function refreshWarn(){RD.innerHTML=noiseWarn()+__lastReadout;} // re-evaluate banner after a toggle
+function stateTable(label,X,cls){
+  return `<span class="lbl">${label}</span>\n`+
+   `  x : <span class="${cls||''}">${fmt(X[0])}</span>   ẋ : <span class="${cls||''}">${fmt(X[2])}</span>\n`+
+   `  y : <span class="${cls||''}">${fmt(X[1])}</span>   ẏ : <span class="${cls||''}">${fmt(X[3])}</span>\n`;
+}
+function showPhi(s){
+  const P=s.Phi;
+  // make the epoch explicit: t₀ = 0 is the estimation epoch; t runs to one orbit period.
+  let t=`<span class="lbl">Φ(t, t₀)   t₀ = <span class="hi">0.00</span> (epoch)\n`+
+        `           t  = <span class="hi">${s.t.toFixed(2)}</span>   of  T_orbit = ${T_ORB.toFixed(2)}</span>\n\n`;
+  for(let r=0;r<4;r++){t+="  ";
+    for(let c=0;c<4;c++)t+=(P[4*r+c]>=0?" ":"")+P[4*r+c].toFixed(3)+" ";
+    t+="\n";}
+  t+=`\n<span class="lbl">x(t) = Φ(t,t₀) x₀ — propagates the epoch\ndeviation forward. Observations run from the\nfirst sample (t≈${T_OBS[0].toFixed(2)}) to one period (${T_ORB.toFixed(2)}).</span>`;
+  showReadout(t);
+}
+function showLam(){
+  let t=`<span class="lbl">Information matrix  Λ = Σ HᵢᵀWHᵢ (+Λ₀)</span>\n`;
+  for(let r=0;r<4;r++){t+="  ";
+    for(let c=0;c<4;c++)t+=fm(S.Lam[r][c],1).padStart(9)+" ";
+    t+="\n";}
+  t+=`\n<span class="lbl">N = Σ HᵢᵀW yᵢ</span>\n  `+S.Nv.map(v=>fm(v,2).padStart(9)).join(" ");
+  t+=`\n\n<span class="lbl">Next: solve  Λ x̂₀ = N</span>`;
+  showReadout(t);
+}
+/* full covariance analysis from P (and Λ = P⁻¹) */
+function covStats(P){
+  const sig=[0,1,2,3].map(i=>Math.sqrt(Math.max(P[i][i],0)));
+  const corr=(i,j)=> sig[i]*sig[j]>0 ? P[i][j]/(sig[i]*sig[j]) : 0;
+  const tr=P[0][0]+P[1][1]+P[2][2]+P[3][3];
+  const det=detN(P);
+  const cond=condNum(S.Lam||invN(P));
+  return {sig,corr,tr,det,cond};
+}
+function fmtRho(v){return (v>=0?'+':'−')+Math.abs(v).toFixed(2);}
+/* formatted covariance block for the telemetry readout (1σ, correlations,
+   condition number, trace, log-determinant) with colour-coded warnings */
+function covBlock(P){
+  if(!P)return '';
+  const {sig,corr,tr,det,cond}=covStats(P);
+  const cs=[[0,1],[0,2],[0,3],[1,2],[1,3],[2,3]].map(([i,j])=>corr(i,j));
+  const condBad=cond>1e8, hiCorr=cs.some(c=>Math.abs(c)>0.95);
+  return (
+   `\n<span class="lbl">── 1σ uncertainties ──</span>\n`+
+   `  σx=${fm(sig[0],2)}   σy=${fm(sig[1],2)}\n  σẋ=${fm(sig[2],2)}   σẏ=${fm(sig[3],2)}\n`+
+   `\n<span class="lbl">── correlations ──</span>${hiCorr?'  <span class="hi">⚠ strongly correlated states</span>':''}\n`+
+   `  ρ(x,y) =${fmtRho(corr(0,1))}    ρ(x,ẋ) =${fmtRho(corr(0,2))}\n`+
+   `  ρ(x,ẏ) =${fmtRho(corr(0,3))}    ρ(y,ẋ) =${fmtRho(corr(1,2))}\n`+
+   `  ρ(y,ẏ) =${fmtRho(corr(1,3))}    ρ(ẋ,ẏ) =${fmtRho(corr(2,3))}\n`+
+   `\n<span class="lbl">── information ──</span>${condBad?'  <span class="bad">⚠ near-singular Λ</span>':''}\n`+
+   `  cond(Λ)=<span class="${condBad?'bad':'hi'}">${cond.toExponential(1)}</span>    tr(P)=${tr.toExponential(1)}\n`+
+   `  log₁₀|P| = ${Math.log10(Math.abs(det)||1e-300).toFixed(1)}\n`
+  );
+}
+/* raw covariance P (4×4) plus the estimator gain — shown initially at the Solve step */
+function gainCovBlock(){
+  if(!S.P)return '';
+  let t=`\n<span class="lbl">── covariance  P₀ = Λ⁻¹  (4×4) ──</span>\n`;
+  for(let r=0;r<4;r++){t+="  "; for(let c=0;c<4;c++)t+=fm(S.P[r][c],1).padStart(9)+" "; t+="\n";}
+  if(isSequential()&&S.Kgain)
+    t+=`\n<span class="lbl">── Kalman gain  K = P̄H̃ᵀ(H̃P̄H̃ᵀ+R)⁻¹  (last obs) ──</span>\n  [${S.Kgain.map(v=>fm(v,3)).join("  ")}]\n`;
+  else
+    t+=`\n<span class="lbl">── batch gain  G = (HᵀWH)⁻¹HᵀW  (4×m) ──</span>\n  applied to all ${N_OBS} residuals at once → x̂₀\n`;
+  return t;
+}
+
+/* ============================================================
+   PIPELINE
+============================================================ */
+function genObservations(){
+  S.sigma=NOISE[S.noiseKey].s;
+  S.rng=mulberry32(42);
+  S.truth=propagate(X_TRUE,T_OBS);
+  S.truth.path=orbitPath(X_TRUE);                            // closed display ellipse
+  const n=S.truth.samples.length, sig=S.sigma;
+  if(S.noiseMode==='coloured'){
+    const a=RHO_AR, eps=new Array(n);
+    eps[0]=sig*gaussPair(S.rng);                              // stationary start, var = σ²
+    for(let i=1;i<n;i++) eps[i]=a*eps[i-1]+Math.sqrt(1-a*a)*sig*gaussPair(S.rng);
+    S.rhoObs=S.truth.samples.map((s,i)=>rho(s.X)+eps[i]);
+    S.R=[];                                                   // R_ij = σ²·ρ^|i-j|
+    for(let i=0;i<n;i++){S.R.push([]);
+      for(let j=0;j<n;j++) S.R[i][j]=sig*sig*Math.pow(a,Math.abs(i-j));}
+  }else{
+    S.rhoObs=S.truth.samples.map(s=>rho(s.X)+sig*gaussPair(S.rng));
+    S.R=null;                                                 // diagonal σ²·I (implicit)
+  }
+  odlog(`Acquired ${N_OBS} range observables · σ=${S.sigma} · ${S.noiseMode==='coloured'?'coloured AR(1) ρ='+RHO_AR:'white'} noise`,'info');
+}
+function setGuess(){
+  const d=GUESS[S.guessKey].d;
+  S.Xref0=X_TRUE.map((v,i)=>v+d[i]);
+  S.ref=propagate(S.Xref0,T_OBS);
+  S.ref.path=orbitPath(S.Xref0);                            // closed display ellipse
+}
+function computeResiduals(){
+  S.resid=S.ref.samples.map((s,i)=>S.rhoObs[i]-rho(s.X));
+}
+function buildH(){ // stacked mapping matrix, row i = Hᵢ = H̃ᵢΦ(tᵢ,t₀)  (n×4)
+  return S.ref.samples.map(s=>{
+    const ht=Htil(s.X), Phi=s.Phi, H=[0,0,0,0];
+    for(let c=0;c<4;c++)for(let r=0;r<4;r++)H[c]+=ht[r]*Phi[4*r+c];
+    return H;});
+}
+function cholL(A){ // lower Cholesky factor L with A = L Lᵀ
+  const n=A.length, L=Array.from({length:n},()=>new Array(n).fill(0));
+  for(let i=0;i<n;i++)for(let j=0;j<=i;j++){let s=A[i][j];
+    for(let k=0;k<j;k++)s-=L[i][k]*L[j][k];
+    L[i][j]= i===j ? Math.sqrt(Math.max(s,1e-300)) : s/L[j][j];}
+  return L;
+}
+function fwdSolve(L,b){ // solve L x = b  (x = L⁻¹ b)
+  const n=b.length, x=new Array(n).fill(0);
+  for(let i=0;i<n;i++){let s=b[i]; for(let k=0;k<i;k++)s-=L[i][k]*x[k]; x[i]=s/L[i][i];}
+  return x;
+}
+/* --- filter taxonomy ----------------------------------------------------- */
+function usesApriori(t){t=t||S.filterType; return t==='wls_ap'||t==='mve_ap'||t==='kf'||t==='ekf';}
+function isSequential(t){t=t||S.filterType; return t==='kf'||t==='ekf';}
+function weightMode(){ // which measurement weight W the chosen estimator uses
+  if(S.filterType==='ls') return 'identity';                 // LS  : W = I
+  if(S.filterType==='mve'||S.filterType==='mve_ap') return 'full'; // MVE : W = R⁻¹
+  return (S.whiten&&S.R)?'full':'diag';                      // WLS : W = 1/σ² (or whitened if toggled)
+}
+function priorDiag(){ // diagonal of P̄₀ for the active prior preset
+  if(S.priorType==='custom'){const c=S.priorCustom; return [c.sx*c.sx,c.sy*c.sy,c.svx*c.svx,c.svy*c.svy];}
+  return PRIORS[S.priorType].diag.slice();
+}
+function setupApriori(){ // refresh P̄₀ / x̄₀ from the current filter + prior selection
+  if(usesApriori()){
+    S.Pbar0=priorDiag();
+    if(!S.xbar0) S.xbar0=[0,0,0,0];                          // prior centred on current reference
+    if(S.priorType==='custom'&&S.priorCustom.off) S.xbar0=[S.priorCustom.off,S.priorCustom.off,0,0];
+  } else { S.Pbar0=null; S.xbar0=null; }
+}
+/* Batch normal equations  Λ = HᵀWH (+P̄⁻¹) ,  N = HᵀWy (+P̄⁻¹x̄).
+   Weight W is chosen by weightMode(); the a priori term is added only for *_ap. */
+function accumulateNormals(){
+  setupApriori();
+  const Hs=buildH(), y=S.resid, n=Hs.length, wm=weightMode();
+  const Lam=[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
+  const Nv=[0,0,0,0];
+  if(wm==='full'&&S.R){
+    // W = R⁻¹ via Cholesky whitening:  z = V⁻¹y , Hw = V⁻¹H  ⇒  Λ = HwᵀHw , N = Hwᵀz
+    const V=cholL(S.R), z=fwdSolve(V,y), Hw=Hs.map(()=>[0,0,0,0]);
+    for(let c=0;c<4;c++){const zc=fwdSolve(V,Hs.map(h=>h[c])); for(let i=0;i<n;i++)Hw[i][c]=zc[i];}
+    for(let i=0;i<n;i++)for(let r=0;r<4;r++){Nv[r]+=Hw[i][r]*z[i];
+      for(let c=0;c<4;c++)Lam[r][c]+=Hw[i][r]*Hw[i][c];}
+  }else{
+    const w = wm==='identity' ? 1 : 1/(S.sigma*S.sigma);     // LS uses I, WLS uses 1/σ²
+    for(let i=0;i<n;i++)for(let r=0;r<4;r++){Nv[r]+=w*Hs[i][r]*y[i];
+      for(let c=0;c<4;c++)Lam[r][c]+=w*Hs[i][r]*Hs[i][c];}
+  }
+  if(usesApriori()&&S.Pbar0){ // a priori enters like pseudo-observations: Λ += P̄⁻¹ , N += P̄⁻¹x̄
+    for(let d=0;d<4;d++){const inv=1/S.Pbar0[d]; Lam[d][d]+=inv; Nv[d]+=inv*(S.xbar0?S.xbar0[d]:0);}
+  }
+  S.Lam=Lam; S.Nv=Nv;
+  odlog(`Information matrix Λ = ΣHᵀWH accumulated from ${N_OBS} obs · N = HᵀWy assembled`,'info');
+}
+function solveLSE(){
+  S.xhat=solveN(S.Lam,S.Nv);
+  S.P=invN(S.Lam);
+  // LS reports covariance P = (HᵀH)⁻¹σ² (unit-weight normal matrix scaled by the noise variance)
+  if(S.P&&S.filterType==='ls'){const s2=S.sigma*S.sigma; S.P=S.P.map(r=>r.map(v=>v*s2));}
+  const good=S.xhat&&S.xhat.every(Number.isFinite);
+  if(!good){ odlog('ERROR: ill-conditioned information matrix Λ — inversion unstable','err'); return false; }
+  const k=condNum(S.Lam);
+  if(k>1e8) odlog(`WARNING: cond(Λ)=${k.toExponential(1)} — near-singular, covariance optimistic`,'warn');
+  odlog('Λ inverted · batch update  x̂₀ = Λ⁻¹N  computed','info');
+  odlog('Note: Λ⁻¹N uses all historical data at once, distinct from sequential Kalman gain K.','dim');
+  return true;
+}
+/* Sequential (Kalman) processing — replaces the batch solve for KF/EKF.
+   State = deviation x at the current observation time. Each step does
+   a time update with the inter-sample STM Φ(tₖ,tₖ₋₁), then a scalar
+   measurement update on the range partial H̃. The filtered state at tₙ is
+   mapped back to the epoch t₀ so x̂₀ / P₀ stay comparable with the batch path. */
+function runSequentialFilter(){
+  setupApriori();
+  const sig2=S.sigma*S.sigma, samp=S.ref.samples, n=samp.length;
+  let x=S.xbar0?S.xbar0.slice():[0,0,0,0];                 // a priori mean (epoch frame)
+  let P=S.Pbar0?[[S.Pbar0[0],0,0,0],[0,S.Pbar0[1],0,0],[0,0,S.Pbar0[2],0],[0,0,0,S.Pbar0[3]]]
+               :[[1e6,0,0,0],[0,1e6,0,0],[0,0,1e6,0],[0,0,0,1e6]]; // diffuse if no prior
+  let prevPhi=null;
+  for(let i=0;i<n;i++){
+    const s=samp[i], Phi_i=mat4(s.Phi);
+    const Phistep = prevPhi ? mmulA(Phi_i, invN(prevPhi)) : Phi_i; // Φ(tᵢ,tᵢ₋₁)=Φ(tᵢ,t₀)Φ(tᵢ₋₁,t₀)⁻¹
+    x = mvmul(Phistep,x);                                   // time update: x̄ = Φ x̂
+    P = mmulA(mmulA(Phistep,P),transpose4(Phistep));        //              P̄ = Φ P Φᵀ (+Q=0)
+    const Ht=Htil(s.X), PHt=mvmul(P,Ht);                    // measurement update (scalar range)
+    const innovCov=Ht.reduce((a,h,k)=>a+h*PHt[k],0)+sig2;   // H̃P̄H̃ᵀ + R
+    const K=PHt.map(v=>v/innovCov);                         // gain K = P̄H̃ᵀ(·)⁻¹
+    S.Kgain=K.slice();                                       // expose the latest Kalman gain
+    const innov=S.resid[i]-Ht.reduce((a,h,k)=>a+h*x[k],0);  // y − H̃x̄
+    x=x.map((v,k)=>v+K[k]*innov);                           // x̂ = x̄ + Kν
+    const KH=[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];     // P = (I − KH̃)P̄
+    for(let r=0;r<4;r++)for(let c=0;c<4;c++)KH[r][c]=(r===c?1:0)-K[r]*Ht[c];
+    P=mmulA(KH,P);
+    prevPhi=Phi_i;
+  }
+  const PhiN=mat4(samp[n-1].Phi), PhiNi=invN(PhiN);         // map tₙ → epoch t₀
+  S.xhat=mvmul(PhiNi,x);
+  S.P=mmulA(mmulA(PhiNi,P),transpose4(PhiNi));
+  S.Lam=invN(S.P)||S.Lam;                                   // expose Λ = P⁻¹ for the readout
+  S.Nv=S.Lam?mvmul(S.Lam,S.xhat):[0,0,0,0];                 // N = Λx̂ (keeps showLam consistent)
+  return S.xhat.every(Number.isFinite);
+}
+function wrms(){
+  if(weightMode()==='full'&&S.R){ // proper √(yᵀR⁻¹y / m) via whitened residuals z = V⁻¹y
+    const z=fwdSolve(cholL(S.R),S.resid);
+    return Math.sqrt(z.reduce((s,r)=>s+r*r,0)/z.length);
+  }
+  // diagonal / unit-weight form (biased when noise is correlated and ignored)
+  return Math.sqrt(S.resid.reduce((a,r)=>a+r*r,0)/(S.resid.length*S.sigma*S.sigma));
+}
+function lag1Corr(a){ // lag-1 autocorrelation of a residual series
+  const m=a.reduce((s,v)=>s+v,0)/a.length; let num=0,den=0;
+  for(let i=0;i<a.length;i++)den+=(a[i]-m)*(a[i]-m);
+  for(let i=1;i<a.length;i++)num+=(a[i]-m)*(a[i-1]-m);
+  return den>0?num/den:0;
+}
+/* One correction step. Batch estimators (LS/WLS/MVE ±ap) build & solve the
+   normal equations; KF/EKF run a single sequential forward pass instead.
+   The reference is then advanced (X*₀ ← X*₀ + x̂₀) and re-propagated —
+   that re-linearisation is exactly what makes the KF "extended" (EKF). */
+function oneIteration(){
+  S.ghosts.push(S.ref.path); if(S.ghosts.length>6)S.ghosts.shift();
+  computeResiduals();
+  const ok = isSequential() ? runSequentialFilter() : (accumulateNormals(), solveLSE());
+  if(!ok){S.diverged=true; return;}
+  const n=Math.hypot(...S.xhat);
+  S.Xref0=S.Xref0.map((v,i)=>v+S.xhat[i]);          // X*₀ ← X*₀ + x̂₀
+  if(usesApriori()&&S.xbar0) S.xbar0=S.xbar0.map((v,i)=>v-S.xhat[i]); // x̄₀ ← x̄₀ − x̂₀ (keep X*₀+x̄₀ fixed)
+  S.ref=propagate(S.Xref0,T_OBS); S.ref.path=orbitPath(S.Xref0);    // closed display ellipse
+  computeResiduals();
+  S.iters.push({n, rms:wrms(), gain:(isSequential()&&S.Kgain)?Math.hypot(...S.Kgain):null}); // ‖K‖ for KF/EKF
+  if(!Number.isFinite(n)||n>10)S.diverged=true;
+  else if(S.filterType==='kf')S.converged=true;     // linear KF converges in a single pass
+  else if(n<EPS_CONV||S.iters.length>=MAX_IT)S.converged=true;
+  const it=S.iters[S.iters.length-1];
+  odlog(`Iteration ${S.iters.length} (${S.filterType}): ‖x̂₀‖=${it.n.toExponential(2)}, wRMS=${it.rms.toFixed(3)}`,'info');
+  if(S.diverged) odlog('WARNING: divergence — ‖x̂₀‖ growing; linearization assumption violated','warn');
+  else if(S.converged){ odlog(`SOLUTION CONVERGED: ${S.iters.length} iterations, wRMS=${it.rms.toFixed(3)} within thresholds`,
+    (it.rms>=0.9&&it.rms<=1.1)?'ok':'warn');
+    try{ ODSound.converge(); }catch(e){} }   // convergence chime
+}
+/* Re-evaluate x̂/P/Λ for the currently selected filter at the existing
+   (converged) reference — used by the Results step so switching estimator
+   updates the covariance report without disturbing the recovered state. */
+function recomputeAtReference(){
+  if(!S.ref)return;
+  computeResiduals(); setupApriori();
+  if(isSequential())runSequentialFilter(); else { accumulateNormals(); solveLSE(); }
+}
+/* Iteration reset — return the reference to the original first guess so a different
+   estimator/prior can be tried from scratch (clears the run, keeps the data). */
+function resetIteration(){
+  S.Xref0=X_TRUE.map((v,i)=>v+GUESS[S.guessKey].d[i]);
+  S.ref=propagate(S.Xref0,T_OBS); S.ref.path=orbitPath(S.Xref0);
+  S.ghosts=[]; S.iters=[]; S.converged=false; S.diverged=false;
+  S.xbar0=null; S.xhat=null; S.P=null; S.Lam=null;
+  setupApriori(); computeResiduals();
+  renderPanel(); plotResiduals("Pre-fit residuals — systematic signature",getCSS('--ref'),true); draw();
+}
+/* Results inference: error-vs-truth, normalized error (Δ/σ), filter–covariance
+   consistency check, residual whiteness verdict, and prior shrinkage. */
+function resultsReport(){
+  const err=S.Xref0.map((v,i)=>v-X_TRUE[i]);
+  const sig=[0,1,2,3].map(i=>Math.sqrt(Math.max(S.P[i][i],0)));
+  const Ns=err.map((e,i)=>sig[i]>0?Math.abs(e)/sig[i]:0), maxN=Math.max(...Ns);
+  const posErr=Math.hypot(err[0],err[1]), velErr=Math.hypot(err[2],err[3]);
+  const w=wrms(), wGood=w>=0.9&&w<=1.1, consistent=maxN<=3;
+  let prior='';
+  if(usesApriori()&&S.Pbar0){
+    const trP=S.P[0][0]+S.P[1][1]+S.P[2][2]+S.P[3][3], trPb=S.Pbar0.reduce((a,b)=>a+b,0);
+    const pct=Math.max(0,Math.min(100,Math.round((1-trP/trPb)*100)));
+    prior=`  prior: <span class="hi">${S.priorType}</span> → data cut total variance by <span class="hi">${pct}%</span>\n`;
+  }
+  // P vs Λ (=P⁻¹) final diagonals
+  const dP=[0,1,2,3].map(i=>S.P[i][i]);
+  const dL=[0,1,2,3].map(i=>(S.Lam&&S.Lam[i]?S.Lam[i][i]:1/Math.max(dP[i],1e-300)));
+  return (
+   `\n<span class="lbl">── error vs truth ──</span>\n`+
+   `  |Δr| = <span class="hi">${posErr.toExponential(2)}</span>    |Δv| = <span class="hi">${velErr.toExponential(2)}</span>\n`+
+   `  Δ/σ  = [${Ns.map(v=>v.toFixed(1)).join("  ")}]   max ${maxN.toFixed(1)}σ\n`+
+   `\n<span class="lbl">── inference ──</span>\n`+
+   `  consistency: <span class="${consistent?'gd':'bad'}">${consistent?'truth within 3σ':'⚠ truth outside 3σ'} (max ${maxN.toFixed(1)}σ ${consistent?'≤':'>'} 3σ)</span>\n`+
+   `  residuals  : <span class="${wGood?'gd':'hi'}">${wGood?'white — wRMS ≈ 1 ✓':'structured — wRMS = '+w.toFixed(2)}</span>\n`+
+   prior+
+   `\n<span class="lbl">── P  vs  Λ = P⁻¹  (diagonals) ──</span>\n`+
+   `  diag P = [${dP.map(v=>fm(v,1)).join("  ")}]\n`+
+   `  diag Λ = [${dL.map(v=>fm(v,1)).join("  ")}]\n`
+  );
+}
+function plotConvergence(){
+  const pts=S.iters.map((it,i)=>[i+1,Math.log10(Math.max(it.n,1e-14))]);
+  plotSeries({pts,kind:'line',color:getCSS('--ref'),
+    title:"‖x̂₀‖ per iteration (log₁₀)",ylab:"log₁₀‖x̂₀‖",
+    hline:Math.log10(EPS_CONV), overlay:filterLabel()});
+}
+/* connect=true → draw the connecting line (pre-fit: exposes the systematic signature);
+   connect=false → bare scatter (post-fit: reads as unstructured noise) */
+function plotResiduals(title,color,connect){
+  const corner = S.noiseMode==='coloured' ? 'lag-1 ρ̂ = '+lag1Corr(S.resid).toFixed(2) : undefined;
+  plotSeries({pts:S.ref.samples.map((s,i)=>[s.t,S.resid[i]]),
+    title, ylab:"ρ_obs − ρ* ", xlab:"t (orbit time)", hline:0, color:color||getCSS('--truth'),
+    band:S.sigma, bandLabel:"±σ", cornerText:corner, overlay:filterLabel(),
+    kind:connect?'line':undefined});
+}
+
+/* ============================================================
+   STEP DEFINITIONS — left panel
+============================================================ */
+const CHIP_LABELS=["Problem","Guess","STM","O−C","H = H̃Φ","Solve","Iterate","Results"];
+const stepContent=document.getElementById('stepContent');
+
+function fcard(title,math,why,cls){
+  return `<div class="fcard ${cls||''}"><div class="fcard-t">${title}</div>
+  <div class="fmath">${math}</div><div class="fwhy">${why}</div></div>`;
+}
+function guessMethodCard(k){
+  if(k==='lambert') return fcard("Gauss / Lambert — two-position, two-time",
+   "given  r₁, r₂,  Δt = t₂ − t₁\nΔθ = ∠(r₁, r₂)\n√μ · Δt = g(a, Δθ)        (Lambert time-of-flight)\nf, g  Lagrange coeff.  ⇒  v₁ = (r₂ − f r₁)/g\nX*₀ = [ r₁ , v₁ ]",
+   "Two position vectors and the time between them fix the connecting orbit. Solving Lambert’s problem returns the epoch velocity v₁, giving the full first guess X*₀.","teal");
+  if(k==='newton') return fcard("Newton–Raphson — iterated point solution",
+   "X₀ⁿ⁺¹ = X₀ⁿ − [∂J/∂X₀ⁿ]⁻¹ J(X₀ⁿ)\nstop:  ‖ΔX₀‖ < ε",
+   "Refines a trial epoch state by driving the cost gradient to zero; each step solves a linear system in the Jacobian until the update falls below ε.","blue");
+  return "";
+}
+function choiceRow(id,opts,sel){
+  return `<div class="choiceRow" id="${id}">`+opts.map(o=>
+   `<button class="opt ${sel===o.k?'sel':''}" data-k="${o.k}">${o.t}<small>${o.s}</small></button>`
+  ).join("")+`</div>`;
+}
+function wireChoices(id,cb){
+  document.querySelectorAll(`#${id} .opt`).forEach(b=>{
+    b.onclick=()=>{document.querySelectorAll(`#${id} .opt`).forEach(x=>x.classList.remove('sel'));
+      b.classList.add('sel'); cb(b.dataset.k);};});
+}
+function nextBtn(){return `<button class="act next" id="nextB">Continue →</button>`;}
+function wireNext(){const b=document.getElementById('nextB');
+  if(b)b.onclick=()=>{cancelAnim(); S.step++; S.maxStep=Math.max(S.maxStep,S.step); renderAll();};}
+
+/* reusable slider — returns an HTML string; onChange dispatched globally by id */
+let __sliderSeq=0; const __sliderCBs={};
+function makeSlider({label,min,max,step,value,onChange}){
+  const id='sl'+(++__sliderSeq); __sliderCBs[id]=onChange;
+  return `<div class="sliderRow">
+   <label class="sliderLbl" for="${id}">${label}<span class="sliderVal" id="${id}v">${(+value).toFixed(2)}</span></label>
+   <input type="range" class="slider" id="${id}" min="${min}" max="${max}" step="${step}" value="${value}"
+     oninput="__sliderInput('${id}',this.value)"></div>`;
+}
+function __sliderInput(id,val){
+  const v=parseFloat(val);
+  const ve=document.getElementById(id+'v'); if(ve)ve.textContent=v.toFixed(2);
+  const cb=__sliderCBs[id]; if(cb)cb(v);
+}
+
+/* ---- small left-panel info helpers ---- */
+function vec4(X,d){return "["+X.map(v=>fm(v,d??4)).join("  ")+"]";}
+function infoCard(title,body,cls){return `<div class="fcard ${cls||'blue'}"><div class="fcard-t">${title}</div><div class="fmath">${body}</div></div>`;}
+function wVal(){return S.sigma?1/(S.sigma*S.sigma):0;}
+/* configuration summary shown in the left panel (noise, weight, estimator, a priori) */
+function configCard(){
+  const wm=weightMode(), wlab=wm==='full'?'R⁻¹ (full)':wm==='identity'?'I (unweighted)':'diag 1/σ²';
+  const lines=[
+    `sensor σ    : ${S.sigma}`,
+    `noise model : ${S.noiseMode==='coloured'?'AR(1) ρ='+RHO_AR:'white'}`,
+    `estimator   : ${S.filterType}`,
+    `weight  W   : ${wlab}`+(wm!=='identity'?`   1/σ² = ${fm(wVal(),1)}`:'')
+  ];
+  if(usesApriori()) lines.push(`a priori    : ${S.priorType}   P̄₀=diag[${(S.Pbar0||priorDiag()).map(v=>fm(v,1)).join(", ")}]`);
+  return infoCard("configuration",lines.join("\n"));
+}
+
+/* ============================================================
+   FILTER SELECTOR  (visible from Step 4 onward)
+============================================================ */
+/* Per-estimator formula dispatcher → {cost, normalEq, gain, covariance} */
+const FILTER_FORMULAS={
+  ls:    {cost:"J = ½ (y−Hx)ᵀ(y−Hx)",                           normalEq:"x̂ = (HᵀH)⁻¹ Hᵀy",                       gain:"—", covariance:"P = (HᵀH)⁻¹ σ²"},
+  wls:   {cost:"J = ½ (y−Hx)ᵀW(y−Hx),  W = 1/σ²",               normalEq:"x̂ = (HᵀWH)⁻¹ HᵀWy",                     gain:"—", covariance:"P = (HᵀWH)⁻¹"},
+  wls_ap:{cost:"J = ½ (y−Hx)ᵀW(y−Hx) + ½(x−x̄)ᵀP̄⁻¹(x−x̄)",      normalEq:"x̂ = (HᵀWH+P̄⁻¹)⁻¹(HᵀWy+P̄⁻¹x̄)",          gain:"—", covariance:"P = (HᵀWH+P̄⁻¹)⁻¹"},
+  mve:   {cost:"min E‖x̂−x‖² ,  W = R⁻¹",                        normalEq:"x̂ = (HᵀR⁻¹H)⁻¹ HᵀR⁻¹y",                gain:"—", covariance:"P = (HᵀR⁻¹H)⁻¹"},
+  mve_ap:{cost:"min E‖x̂−x‖²  with prior",                       normalEq:"x̂ = (HᵀR⁻¹H+P̄⁻¹)⁻¹(HᵀR⁻¹y+P̄⁻¹x̄)",   gain:"—", covariance:"P = (HᵀR⁻¹H+P̄⁻¹)⁻¹"},
+  kf:    {cost:"sequential MMSE (per observation)",             normalEq:"x̂ = x̄ + K(y − H̃x̄)", gain:"K = P̄H̃ᵀ(H̃P̄H̃ᵀ + R)⁻¹", covariance:"P = (I − KH̃)P̄ ,  time: P̄ = ΦPΦᵀ"},
+  ekf:   {cost:"sequential MMSE, relinearised",                 normalEq:"x̂ = x̄ + K(y − H̃x̄) ;  X*₀ ← X̂₀", gain:"K = P̄H̃ᵀ(H̃P̄H̃ᵀ + R)⁻¹", covariance:"P = (I − KH̃)P̄ ,  re-propagate each pass"},
+};
+const FILTER_PILLS=[
+  {k:'ls',t:'LS'},{k:'wls',t:'WLS'},{k:'wls_ap',t:'WLS + a priori'},
+  {k:'mve',t:'MVE'},{k:'mve_ap',t:'MVE + a priori'},{k:'kf',t:'Kalman'},{k:'ekf',t:'Extended Kalman'}];
+const PRIOR_PILLS=[{k:'weak',t:'Weak'},{k:'nominal',t:'Nominal'},{k:'tight',t:'Tight'},{k:'custom',t:'Custom'}];
+function filterColorClass(){const t=S.filterType;
+  return (t==='mve'||t==='mve_ap')?'blue':(t==='kf'||t==='ekf')?'teal':'';}
+function pillRow(id,opts,sel,locked){
+  return `<div class="pillRow" id="${id}">`+opts.map(o=>
+    `<button class="pill ${sel===o.k?'sel':''}" data-k="${o.k}" ${locked?'disabled':''}>${o.t}</button>`).join("")+`</div>`;
+}
+function wirePills(id,cb){
+  document.querySelectorAll(`#${id} .pill`).forEach(b=>{
+    b.onclick=()=>{document.querySelectorAll(`#${id} .pill`).forEach(x=>x.classList.remove('sel'));
+      b.classList.add('sel'); cb(b.dataset.k);};});
+}
+function filterFormulaCard(){
+  const f=FILTER_FORMULAS[S.filterType];
+  const body = isSequential()
+    ? `gain:       ${f.gain}\nupdate:     ${f.normalEq}\ncovariance: ${f.covariance}`
+    : `cost:       ${f.cost}\nestimate:   ${f.normalEq}\ncovariance: ${f.covariance}`;
+  const nice=S.filterType.toUpperCase().replace('_AP','+ap');
+  return fcard("estimator — "+nice, body,
+    "Filter choice changes the weighting W, whether a prior is used, and (KF/EKF) batch→sequential processing.",
+    filterColorClass());
+}
+const FILTER_PRIOR_CARD=()=>fcard("a priori as pseudo-observations",
+  "x̄₀ = a priori deviation      P̄₀ = a priori covariance\nΛ₀ = P̄₀⁻¹                    N₀ = P̄₀⁻¹ x̄₀\nx̂ = (HᵀR⁻¹H + P̄⁻¹)⁻¹(HᵀR⁻¹y + P̄⁻¹x̄)",
+  "The prior enters the normal equations exactly like extra observations — it adds information Λ₀ and a target N₀.","blue");
+function customPriorSliders(){
+  const c=S.priorCustom, lg=v=>Math.log10(v);   // σ sliders are log-scaled 1e-4 … 1e2
+  return makeSlider({label:"σ_x  (log₁₀)",min:-4,max:2,step:0.1,value:lg(c.sx), onChange:v=>{S.priorCustom.sx =Math.pow(10,v); setupApriori();}})
+       + makeSlider({label:"σ_y  (log₁₀)",min:-4,max:2,step:0.1,value:lg(c.sy), onChange:v=>{S.priorCustom.sy =Math.pow(10,v); setupApriori();}})
+       + makeSlider({label:"σ_ẋ (log₁₀)",min:-4,max:2,step:0.1,value:lg(c.svx),onChange:v=>{S.priorCustom.svx=Math.pow(10,v); setupApriori();}})
+       + makeSlider({label:"σ_ẏ (log₁₀)",min:-4,max:2,step:0.1,value:lg(c.svy),onChange:v=>{S.priorCustom.svy=Math.pow(10,v); setupApriori();}})
+       + makeSlider({label:"x̄₀ offset",  min:-0.1,max:0.1,step:0.005,value:c.off,onChange:v=>{S.priorCustom.off=v; setupApriori();}});
+}
+const BATCH_FILTERS=[{k:'ls',t:'LS'},{k:'wls',t:'WLS'},{k:'wls_ap',t:'WLS+ap'},{k:'mve',t:'MVE'},{k:'mve_ap',t:'MVE+ap'}];
+const SEQ_FILTERS=[{k:'kf',t:'Kalman'},{k:'ekf',t:'Extended KF'}];
+function filterClass(t){return isSequential(t||S.filterType)?'sequential':'batch';}
+/* Two mutually-exclusive category tabs (Batch | Sequential): the active tab shows
+   only its estimators; switching tabs disables the other family and snaps to its default.
+   Formulae live in a collapsible box so the panel fits one screen without scrolling. */
+function filterSelectorUI(){
+  const cls=filterClass(), locked=S.step===7;   // Results step: estimator is fixed (set it earlier)
+  const tabs=`<div class="tabRow" id="classTabs">
+     <button class="tab ${cls==='batch'?'sel':''}" data-c="batch" ${locked?'disabled':''}>Batch</button>
+     <button class="tab ${cls==='sequential'?'sel':''}" data-c="sequential" ${locked?'disabled':''}>Sequential</button></div>`;
+  const pills=pillRow("filterRow", cls==='batch'?BATCH_FILTERS:SEQ_FILTERS, S.filterType, locked);
+  let ap='';
+  if(usesApriori()){
+    ap = `<div class="stepEyebrow mini">a priori P̄₀</div>`
+       + pillRow("priorRow",PRIOR_PILLS,S.priorType,locked)
+       + (S.priorType==='custom'&&!locked?`<div class="sliderStack">${customPriorSliders()}</div>`:'');
+  }
+  const lockNote=locked?`<div class="lockNote">🔒 estimator locked for results — change it in an earlier step</div>`:'';
+  const formulae=`<details class="toggleBox"><summary>formulae &amp; covariance form</summary>`
+       + filterFormulaCard() + (usesApriori()?FILTER_PRIOR_CARD():'') + `</details>`;
+  return `<div class="filterWrap">${tabs}${pills}${ap}${lockNote}${formulae}</div>`;
+}
+function wireFilterSelector(){
+  if(!document.getElementById('filterRow'))return;
+  if(S.step===7)return;                          // locked on the Results step — no interaction
+  const tabs=document.getElementById('classTabs');
+  if(tabs)tabs.querySelectorAll('.tab').forEach(b=>{ b.onclick=()=>{
+    const c=b.dataset.c;
+    if(c==='batch'&&isSequential()) S.filterType='wls_ap';   // snap to a default of the chosen family
+    if(c==='sequential'&&!isSequential()) S.filterType='kf';
+    setupApriori(); refreshFilterDisplay(); };});
+  wirePills("filterRow",k=>{S.filterType=k; setupApriori(); refreshFilterDisplay();});
+  if(document.getElementById('priorRow'))
+    wirePills("priorRow",k=>{S.priorType=k; setupApriori(); refreshFilterDisplay();});
+}
+/* COHERENCE: any estimator/prior change re-renders the selector AND, when data
+   already exists, recomputes x̂/P at the current reference and refreshes the
+   plot + telemetry so the display always matches the selected options. */
+function refreshFilterDisplay(){
+  renderPanel();
+  if(S.ref&&S.resid){ recomputeAtReference(); coherentDisplay(); }
+  draw();
+}
+function coherentDisplay(){
+  if(!S.resid)return;
+  if(S.step===6&&S.iters.length) plotConvergence();
+  else if(S.step>=3){
+    const post=S.step>=7, w=wrms(), good=w>=0.9&&w<=1.1;
+    if(post) plotResiduals("Post-fit residuals — "+(good?"≈ pure noise":"structure remains")+" (wRMS="+w.toFixed(2)+")",
+      good?getCSS('--ok'):getCSS('--ref'), false);
+    else plotResiduals("Pre-fit residuals — systematic signature", getCSS('--ref'), true);
+  }
+  if(S.step>=5&&S.P){                       // live covariance readout under the new estimator
+    showReadout(`<span class="lbl">estimate — ${S.filterType}</span>\n`+
+      stateTable("x̂₀",S.xhat,"hi")+covBlock(S.P));
+  }
+}
+
+const STEPS=[
+/* ---------- 0 PROBLEM ---------- */
+{eyebrow:"Stage 1 of 8 · the situation",
+ title:"A spacecraft you cannot see",
+ html(){return `
+  <p class="prose">A spacecraft flies a planar two-body orbit (μ = 1). Its true state
+  <b>X(t)</b> is unknown to us. A single ground station measures only the
+  <em>range</em> ρ — the line-of-sight distance — ${N_OBS} times over one orbit,
+  each reading corrupted by noise ε.</p>
+  ${fcard("The nonlinear OD problem",
+   "Ẋ = F(X, t)            dynamics\nYᵢ = G(Xᵢ, tᵢ) + εᵢ     observations",
+   "The state is never observed directly — only a noisy nonlinear function of it. With p &lt; n per epoch, the system is underdetermined.")}
+  ${fcard("This scenario’s observable","ρ = √((X−X_s)² + (Y−Y_s)²) + ε_ρ",
+   "Range from station GS. The station sits off the symmetry axis — exactly what keeps the problem observable.","teal")}
+  <p class="prose">Pick the sensor quality, then fire the tracking pass.</p>
+  ${choiceRow("noiseRow",[
+    {k:"low", t:"Precision radar", s:NOISE.low.lab},
+    {k:"med", t:"Standard radar",  s:NOISE.med.lab},
+    {k:"high",t:"Noisy radar",     s:NOISE.high.lab}],S.noiseKey)}
+  <p class="prose">Noise model and weighting:</p>
+  ${choiceRow("noiseModeRow",[
+    {k:"white",   t:"White noise",   s:"uncorrelated ε"},
+    {k:"coloured",t:"Coloured noise",s:"AR(1), ρ = 0.85"}],S.noiseMode)}
+  <div class="choiceRow"><button class="opt ${S.whiten?'sel':''}" id="whitenB">Apply W = R⁻¹: <b>${S.whiten?'ON':'OFF'}</b><small>${S.whiten?'whitened least squares':'plain diagonal 1/σ²'}</small></button></div>
+  <button class="act" id="genB" ${S.noiseKey?'':'disabled'}>Run tracking pass ▸</button>
+  <div class="statusline" id="st0">${S.done[0]?'✓ '+N_OBS+' range observations recorded.':''}</div>
+  ${S.done[0]?nextBtn():''}`;},
+ wire(){
+  // COHERENCE: once a pass exists, changing the sensor/noise model re-generates
+  // the data and immediately repaints the observed-range plot so it stays in sync.
+  const regen=()=>{ if(!S.done[0])return;
+    genObservations();
+    plotSeries({pts:S.truth.samples.map((s,i)=>[s.t,S.rhoObs[i]]),
+      title:"Observed ranges  Yᵢ = ρ_obs(tᵢ)",ylab:"ρ_obs"});
+    refreshWarn(); };
+  wireChoices("noiseRow",k=>{S.noiseKey=k;
+    document.getElementById('genB').disabled=false; regen();});
+  wireChoices("noiseModeRow",k=>{S.noiseMode=k; regen();});
+  const wb=document.getElementById('whitenB');
+  if(wb)wb.onclick=()=>{S.whiten=!S.whiten;
+    wb.classList.toggle('sel',S.whiten);
+    wb.querySelector('b').textContent=S.whiten?'ON':'OFF';
+    wb.querySelector('small').textContent=S.whiten?'whitened least squares':'plain diagonal 1/σ²';
+    refreshWarn();};
+  const g=document.getElementById('genB');
+  if(g)g.onclick=()=>{
+    cancelAnim();
+    genObservations();                       // precompute truth + noisy data (deterministic)
+    document.getElementById('st0').textContent="… tracking";
+    // live pass: integrate the truth forward in animation time (~4 s), genuinely live geometry
+    S.anim={type:'live', t0:performance.now(), dur:4000,
+      z:[X_TRUE[0],X_TRUE[1],X_TRUE[2],X_TRUE[3], 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1],
+      simT:0, tail:[[X_TRUE[0],X_TRUE[1]]], k:0, pulses:[],
+      onDone(){
+      S.done[0]=true; renderPanel();
+      plotSeries({pts:S.truth.samples.map((s,i)=>[s.t,S.rhoObs[i]]),
+        title:"Observed ranges  Yᵢ = ρ_obs(tᵢ)",ylab:"ρ_obs"});
+      showReadout(`<span class="lbl">tracking pass complete</span>\n`+
+        `  observations m : <span class="hi">${N_OBS}</span>\n`+
+        `  noise 1σ       : <span class="hi">${S.sigma}</span>\n`+
+        `  noise model    : <span class="hi">${S.noiseMode==='coloured'?'AR(1) ρ='+RHO_AR:'white'}</span>\n`+
+        `  weighting      : <span class="hi">${S.whiten?'W = R⁻¹ (whitened)':'1/σ² (diagonal)'}</span>\n`+
+        `  unknown states n: <span class="hi">4</span>  [x y ẋ ẏ]₀\n\n`+
+        `<span class="lbl">m > n — but every Yᵢ is noisy and\nnonlinear in the state. Estimation begins.</span>`);
+    }};
+    S.rafId=requestAnimationFrame(draw);
+  };
+  wireNext();
+ }},
+/* ---------- 1 GUESS ---------- */
+{eyebrow:"Stage 2 of 8 · initialization",
+ title:"The first guess X*₀",
+ html(){return `
+  <p class="prose">We cannot solve the nonlinear problem directly. Instead we pick a
+  <b>reference trajectory</b> X*(t) — a first-guess orbit from a deterministic
+  point solution — and estimate only the small <em>deviation</em> from it.</p>
+  ${fcard("Deviation from reference",
+   "x(t) = X(t) − X*(t)",
+   "Truth minus guess: the gap. Small gap ⇒ the curved problem looks straight near X*. This is the licence to linearize.")}
+  ${fcard("The convergence warning",
+   "‖x₀‖ small  ⇒  fast, safe convergence",
+   "Nonlinear equations admit multiple solutions. The closer X*₀ is to truth, the smaller the risk of landing on the wrong one.","blue")}
+  <p class="prose">Pick <b>how</b> the first guess is generated:</p>
+  ${choiceRow("methodRow",[
+   {k:"lambert",t:"Gauss / Lambert",s:"two-position, two-time"},
+   {k:"newton", t:"Newton–Raphson",s:"iterated point solution"}],S.guessMethod)}
+  <div id="methodCard">${S.guessMethod?guessMethodCard(S.guessMethod):''}</div>
+  <p class="prose">Choose how good your first guess is — then watch the amber
+  reference orbit appear against the teal truth.</p>
+  ${choiceRow("guessRow",[
+   {k:"close",t:"Good guess",s:GUESS.close.lab},
+   {k:"med",  t:"Rough guess",s:GUESS.med.lab},
+   {k:"far",  t:"Poor guess",s:GUESS.far.lab}],S.guessKey)}
+  <button class="act" id="guessB" ${S.guessKey?'':'disabled'}>Set reference orbit ▸</button>
+  <div class="statusline">${S.done[1]?'✓ Reference X*(t) propagated.':''}</div>
+  ${S.done[1]&&S.Xref0?infoCard("first guess X*₀  ("+(S.guessMethod||'—')+" · "+S.guessKey+")",
+    "x = "+fmt(S.Xref0[0])+"    ẋ = "+fmt(S.Xref0[2])+"\n"+
+    "y = "+fmt(S.Xref0[1])+"    ẏ = "+fmt(S.Xref0[3])+"\n"+
+    "offset d = "+vec4(GUESS[S.guessKey].d,3)+"\n"+
+    "‖d‖ = "+fm(Math.hypot(...GUESS[S.guessKey].d),3)+"   ("+GUESS[S.guessKey].lab+")"):''}
+  ${S.done[1]?nextBtn():''}`;},
+ wire(){
+  wireChoices("methodRow",k=>{S.guessMethod=k;
+    document.getElementById('methodCard').innerHTML=guessMethodCard(k);});
+  wireChoices("guessRow",k=>{S.guessKey=k;
+    document.getElementById('guessB').disabled=false;});
+  const b=document.getElementById('guessB');
+  if(b)b.onclick=()=>{
+    cancelAnim();
+    setGuess();
+    S.anim={type:'ref',t0:performance.now(),dur:1800,onDone(){
+      S.done[1]=true; renderPanel();
+      clearPlot();
+      showReadout(stateTable("true epoch state  X₀ (hidden from estimator)",X_TRUE)+
+       "\n"+stateTable("reference guess  X*₀","hi",)+
+       stateTable("",S.Xref0,"hi").split("\n").slice(1).join("\n"));
+    }};
+    S.rafId=requestAnimationFrame(draw);
+  };
+  wireNext();
+ }},
+/* ---------- 2 STM ---------- */
+{eyebrow:"Stage 3 of 8 · linearization",
+ title:"Linearize, and build the time machine Φ",
+ html(){return `
+  <p class="prose">Near the reference, a first-order Taylor expansion turns the
+  curved problem into a <em>linear</em> one in the deviation x. Two Jacobians appear —
+  the dynamics slope <b>A</b> and the measurement slope <b>H̃</b>.</p>
+  ${fcard("Linearized system",
+   "ẋ(t) = A(t) x(t)         A = [∂F/∂X]*\nyᵢ  = H̃ᵢ xᵢ + εᵢ        H̃ = [∂G/∂X]*",
+   "Both partials are evaluated ON the reference — that is what the * means.")}
+  ${fcard("State transition matrix",
+   "Φ̇(t,t₀) = A(t) Φ(t,t₀)     Φ(t₀,t₀) = I\nx(t) = Φ(t,t₀) x₀",
+   "Φ carries the epoch deviation x₀ to any time. It is integrated numerically alongside the reference orbit — 4 + 16 = 20 coupled ODEs here.","teal")}
+  <p class="prose">Press propagate: a marker rides the reference orbit while the
+  4×4 matrix Φ(t, t₀) evolves live in the telemetry strip. Watch the off-diagonal
+  terms grow — small velocity errors ballooning into position errors.</p>
+  <button class="act" id="stmB">Propagate Φ along X*(t) ▸</button>
+  ${makeSlider({label:"Scrub Φ(t, t₀) manually",min:0,max:1,step:0.01,value:S.stmManual??1,onChange:scrubPhi})}
+  <div class="statusline">${S.done[2]?'✓ Φ(tᵢ, t₀) stored at every observation time.':''}</div>
+  ${S.done[2]?nextBtn():''}`;},
+ wire(){
+  const b=document.getElementById('stmB');
+  if(b)b.onclick=()=>{
+    cancelAnim(); S.stmManual=null;
+    S.anim={type:'stm',t0:performance.now(),dur:3600,onDone(){
+      S.done[2]=true; renderPanel();
+      showPhi(S.ref.samples[S.ref.samples.length-1]);
+      clearPlot("Φ integrated — see matrix in telemetry →");
+    }};
+    S.rafId=requestAnimationFrame(draw);
+  };
+  wireNext();
+ }},
+/* ---------- 3 RESIDUALS ---------- */
+{eyebrow:"Stage 4 of 8 · compare",
+ title:"Residuals: observed minus computed",
+ html(){return `
+  ${filterSelectorUI()}
+  <p class="prose">Along the reference we compute what the station <b>should</b>
+  have measured, ρ* = G(X*ᵢ, tᵢ). Subtracting from the real data gives the
+  <em>residuals</em> — the professor’s O − C.</p>
+  ${fcard("Residuals",
+   "yᵢ = Yᵢ − G(X*ᵢ, tᵢ)\n   = (observed observables) − (computed observables)",
+   "Everything the estimator knows about the gap x₀ is encoded in these numbers. If the guess were perfect, residuals would be pure noise ε.")}
+  ${configCard()}
+  <button class="act" id="resB">Compute pre-fit residuals ▸</button>
+  <div class="statusline">${S.done[3]?'✓ Residual signature visible — a systematic pattern, not noise.':''}</div>
+  ${S.done[3]?`<div class="note">The smooth oscillation in the plot is the
+   <b>signature of the state error</b> projected through the geometry. Pure noise
+   would look like scatter around zero. The estimator’s job: absorb the pattern
+   into x̂₀ until only scatter remains.</div>`+nextBtn():''}`;},
+ wire(){
+  wireFilterSelector();
+  const b=document.getElementById('resB');
+  if(b)b.onclick=()=>{
+    computeResiduals(); S.done[3]=true; renderPanel();
+    plotResiduals("Pre-fit residuals — systematic signature",getCSS('--ref'),true);
+    showReadout(`<span class="lbl">pre-fit residual stats</span>\n`+
+      `  max |y| : <span class="hi">${fm(Math.max(...S.resid.map(Math.abs)),3)}</span>\n`+
+      `  wRMS    : <span class="hi">${fm(wrms(),2)}</span>  <span class="lbl">(σ-normalized;\n  1.0 means residuals ≈ noise)</span>\n\n`+
+      `<span class="lbl">wRMS = √( Σ εᵢ²/σ² / m )</span>`);
+  };
+  wireNext();
+ }},
+/* ---------- 4 H MATRIX ---------- */
+{eyebrow:"Stage 5 of 8 · one epoch",
+ title:"Map every observation to t₀:  H = H̃ Φ",
+ html(){return `
+  ${filterSelectorUI()}
+  <p class="prose">Each residual lives at its own time tᵢ. The trick of the batch
+  processor: use Φ to express <b>every</b> observation in terms of the single
+  epoch deviation x₀ — one unknown, many equations.</p>
+  ${fcard("The single-epoch connection",
+   "yᵢ = H̃ᵢ xᵢ + εᵢ = H̃ᵢ Φ(tᵢ,t₀) x₀ + εᵢ = Hᵢ x₀ + εᵢ",
+   "H̃ is the slope at the observation’s own time. H = H̃Φ folds in the time machine. The batch processor uses H; the Kalman filter uses H̃ alone.")}
+  ${fcard("Accumulate the normal equations",
+   "Λ = Λ₀ + Σ Hᵢᵀ W Hᵢ   ← Information Matrix\nN = N₀ + Σ Hᵢᵀ W yᵢ   ← Accumulated Information Vector",
+   "Λ (Information Matrix) sums the per-observation information HᵀWH; N (Accumulated Information Vector = HᵀWy) sums the data projected through the geometry. A priori adds Λ₀ = P̄₀⁻¹ and N₀ = P̄₀⁻¹x̄₀.","blue")}
+  ${infoCard("weight from selected sensor",
+    "σ (1σ noise) = "+S.sigma+"\n"+
+    (weightMode()==='full'
+      ? "coloured noise → W = R⁻¹ (full matrix)\nR_ij = σ²·ρ^|i−j|,  ρ = "+RHO_AR
+      : weightMode()==='identity'
+        ? "LS → W = I  (unweighted)"
+        : "W = 1/σ² = "+fm(wVal(),3)+"   (per scalar range obs)"))}
+  <button class="act" id="accB">Accumulate Λ and N ▸</button>
+  <div class="statusline">${S.done[4]?'✓ All '+N_OBS+' observations folded into one 4×4 system.':''}</div>
+  ${S.done[4]?nextBtn():''}`;},
+ wire(){
+  wireFilterSelector();
+  const b=document.getElementById('accB');
+  if(b)b.onclick=()=>{
+    if(isSequential())runSequentialFilter(); else accumulateNormals();
+    S.done[4]=true; renderPanel();
+    showLam(); clearPlot("Λ, N assembled — see telemetry →");
+  };
+  wireNext();
+ }},
+/* ---------- 5 SOLVE ---------- */
+{eyebrow:"Stage 6 of 8 · least squares",
+ title:"Solve the normal equations",
+ html(){return `
+  ${filterSelectorUI()}
+  <p class="prose">Gauss, 1809: choose x₀ to minimize the weighted sum of squared
+  residuals. The quadratic cost has a single minimum — found by one linear solve.</p>
+  ${fcard("Cost function and solution",
+   "J(x₀) = ½ (y − Hx₀)ᵀ W (y − Hx₀)\nΛ x̂₀ = N   ⇒   x̂₀ = Λ⁻¹ N\nP₀ = Λ⁻¹",
+   "Batch update: x̂₀ = Λ⁻¹N inverts the Information Matrix Λ against the Accumulated Information Vector N = HᵀWy — using all historical data at once. This differs from sequential estimation, where the Kalman gain K = P̄H̃ᵀ(H̃P̄H̃ᵀ+R)⁻¹ updates one observation at a time. P₀ = Λ⁻¹ is the covariance.")}
+  <button class="act" id="solB">Solve  Λ x̂₀ = N ▸</button>
+  <div class="statusline">${S.done[5]?'✓ Correction x̂₀ found — shown as the blue arrow at the epoch (exaggerated ×18).':''}</div>
+  ${S.done[5]?`<div class="note">The arrow points from the reference epoch toward
+   the truth. One linear solve recovered most of the gap — but the dynamics are
+   nonlinear, so one shot is not enough. We must iterate.</div>`+nextBtn():''}`;},
+ wire(){
+  wireFilterSelector();
+  const b=document.getElementById('solB');
+  if(b)b.onclick=()=>{
+    const ok = isSequential() ? runSequentialFilter() : (accumulateNormals(),solveLSE());
+    if(!ok){alert("Singular system — restart and try a different setup.");return;}
+    S.done[5]=true; renderPanel(); draw();
+    showReadout(`<span class="lbl">solution — ${S.filterType}</span>\n`+
+     `  x̂₀ = [<span class="hi">${S.xhat.map(v=>fm(v,4)).join("  ")}</span>]\n`+
+     `  ‖x̂₀‖ = <span class="hi">${fm(Math.hypot(...S.xhat),2)}</span>\n`+
+     gainCovBlock()+
+     covBlock(S.P)+
+     `\n<span class="lbl">true gap was</span>\n  x₀  = [${GUESS[S.guessKey].d.map(v=>fm(-v,4)).join("  ")}]`);
+    clearPlot("x̂₀ solved — gain K and covariance P in telemetry →");
+  };
+  wireNext();
+ }},
+/* ---------- 6 ITERATE ---------- */
+{eyebrow:"Stage 7 of 8 · differential correction",
+ title:"Update, re-linearize, repeat",
+ html(){
+  // iteration log: error-reduction column (‖x̂₀‖ shrink vs previous) + ‖K‖ gain column for KF/EKF
+  const seq=isSequential();
+  const rows=S.iters.map((it,i)=>{
+    const red=i>0&&it.n>0?S.iters[i-1].n/it.n:null;
+    const rs=red?('×'+(red>=1000?red.toExponential(0):red.toFixed(1))):'   —';
+    let line=`  ${String(i+1).padStart(2)}   ${it.n.toExponential(2)}   ${it.rms.toFixed(3)}   ${rs.padStart(7)}`;
+    if(seq) line+=`   ${(it.gain!=null?it.gain.toExponential(1):'   —').padStart(8)}`;
+    return line;
+  }).join("\n");
+  const logHead=`  it    ‖x̂₀‖       wRMS     ↓factor`+(seq?`     ‖K‖`:'');
+  return `
+  ${filterSelectorUI()}
+  <p class="prose">Apply the correction, rebuild the reference, and run the whole
+  pipeline again. Each loop the linearization is taken about a better orbit, so the
+  next correction shrinks — roughly quadratically, Newton-style.</p>
+  ${fcard("The update — and the a priori shift",
+   "X*₀ ← X*₀ + x̂₀\nx̄₀ ← x̄₀ − x̂₀",
+   "The second line keeps X*₀ + x̄₀ constant across iterations — forgetting it makes the filter re-apply the same correction forever.")}
+  ${fcard("Stop rule",
+   "‖x̂₀‖ < ε = 10⁻⁸   (or max "+MAX_IT+" iterations)",
+   "When the correction is smaller than numerical noise, the reference has absorbed everything the data can teach it.","teal")}
+  <button class="act" id="itB" ${S.converged||S.diverged?'disabled':''}>Run one iteration ▸</button>
+  <button class="act ghosty" id="autoB" ${S.converged||S.diverged?'disabled':''}>Auto-run to convergence ▸▸</button>
+  <button class="act ghosty" id="resetIt">↺ Reset &amp; try another filter</button>
+  ${S.iters.length?`<div class="fcard blue"><div class="fcard-t">iteration log · error reduction${seq?' · gain':''}</div>
+   <div class="fmath">${logHead}\n${rows}</div>
+   <div class="fwhy">↓factor = ‖x̂₀‖ shrink vs previous step (Newton ≈ quadratic).${seq?' ‖K‖ = Kalman-gain magnitude, shrinking as the covariance tightens.':''} wRMS → 1.0 means residuals reached the noise floor.</div></div>`:''}
+  ${S.diverged?`<div class="note warn"><b>Diverged.</b> The guess was too far for the
+   linearization to hold (multiple-solution risk). Restart and choose a
+   closer guess or cleaner data.</div>`:''}
+  ${S.converged?(()=>{const d0=Math.hypot(...GUESS[S.guessKey].d), nf=S.iters[S.iters.length-1].n,
+      errf=Math.hypot(...S.Xref0.map((v,i)=>v-X_TRUE[i]));
+    return `<div class="fcard teal"><div class="fcard-t">convergence outcome</div><div class="fmath">`+
+      `initial gap  ‖d‖     = ${fm(d0,3)}\n`+
+      `final step   ‖x̂₀‖    = ${nf.toExponential(2)}\n`+
+      `correction shrank by  ×${(d0/Math.max(nf,1e-300)).toExponential(1)}\n`+
+      `final error |X̂₀−X₀|  = ${fm(errf,3)}   (${(errf/d0*100).toFixed(1)}% of initial gap)`+
+      `</div><div class="fwhy">The reference absorbed the data: the running correction fell from the initial guess gap down to numerical noise.</div></div>`;})():''}
+  <div class="statusline">${S.converged?'✓ Converged in '+S.iters.length+' iterations — ‖x̂₀‖ below ε.':''}</div>
+  ${S.converged?nextBtn():''}`;},
+ wire(){
+  wireFilterSelector();
+  const run=()=>{oneIteration(); renderPanel(); draw(); plotConvergence();
+    const last=S.iters[S.iters.length-1];
+    showReadout(`<span class="lbl">iteration ${S.iters.length} · ${S.filterType}</span>\n`+
+     `  ‖x̂₀‖ = <span class="hi">${last.n.toExponential(2)}</span>\n`+
+     `  wRMS = <span class="${last.rms>=0.9&&last.rms<=1.1?'gd':'hi'}">${last.rms.toFixed(3)}</span>\n`+
+     covBlock(S.P)+`\n`+
+     stateTable("current X*₀",S.Xref0,"hi")+
+     stateTable("truth     X₀",X_TRUE));};
+  const b1=document.getElementById('itB');
+  if(b1)b1.onclick=run;
+  const b2=document.getElementById('autoB');
+  if(b2)b2.onclick=()=>{
+    b1.disabled=b2.disabled=true;
+    const tick=()=>{ if(S.step!==6) return;            // stop if user navigated away
+      if(S.converged||S.diverged){renderPanel();return;}
+      run(); setTimeout(tick,650); };
+    tick();
+  };
+  const br=document.getElementById('resetIt');
+  if(br)br.onclick=resetIteration;                     // clear run; pick a new estimator and re-iterate
+  wireNext();
+ }},
+/* ---------- 7 RESULTS ---------- */
+{eyebrow:"Stage 8 of 8 · the answer",
+ title:"The estimate — and its uncertainty",
+ html(){
+  if(!S.converged) return `<p class="prose">Finish the iteration first.</p>`;
+  return `
+  ${filterSelectorUI()}
+  <p class="prose">The corrections vanished — the reference <em>is</em> now the
+  estimated trajectory. On the display it has turned blue: X̂(t) = X*(t), sitting on
+  top of the teal truth. The dashed ellipse at the epoch is the 1σ covariance —
+  the uncertainty report that space navigation cares about as much as the state itself.</p>
+  ${fcard("The estimated trajectory",
+   "X̂(t) = X*(t) + x̂(t) ,   ‖x̂₀‖ < ε  ⇒  X̂ ≈ X",
+   "What remains in the residuals is pure measurement noise — wRMS ≈ 1.")}
+  ${fcard("Covariance of the estimate",
+   "P₀ = Λ⁻¹ = (HᵀWH + Λ₀)⁻¹",
+   "Diagonal: variances of each state component. Off-diagonal: their correlations. More / better data ⇒ larger Λ ⇒ smaller P.","blue")}
+  <div class="note">Try the journey again with a <b>poor guess + noisy radar</b> and
+  watch convergence struggle — or with precision radar and see the ellipse shrink.
+  The covariance is where sensor quality becomes navigation capability.</div>
+  <button class="act ghosty" id="againB">↺ Run again with new settings</button>`;},
+ wire(){
+  wireFilterSelector();
+  if(!S.converged)return;
+  recomputeAtReference();                       // refresh x̂/P for the selected estimator
+  const w=wrms(), good=w>=0.9&&w<=1.1;
+  // post-fit reads as scatter; title states honestly whether structure remains
+  plotResiduals("Post-fit residuals — "+(good?"≈ pure noise":"structure remains")+" (wRMS="+w.toFixed(2)+")",
+    good?getCSS('--ok'):getCSS('--ref'), false);
+  showReadout(
+   `<span class="lbl">── estimate (${S.filterType}${usesApriori()?' · '+S.priorType:''}) ──</span>\n`+
+   stateTable("X̂₀",S.Xref0,"gd")+
+   covBlock(S.P)+
+   resultsReport()+
+   `\n<span class="lbl">── convergence ──</span>\n`+
+   `  iterations: ${S.iters.length}   final ‖x̂₀‖: ${S.iters[S.iters.length-1].n.toExponential(1)}   wRMS: <span class="${good?'gd':'hi'}">${w.toFixed(3)}</span>`);
+  const b=document.getElementById('againB');
+  if(b)b.onclick=resetAll;
+  draw();
+ }},
+];
+
+/* ============================================================
+   RENDER + NAV
+============================================================ */
+const chipsEl=document.getElementById('chips');
+function renderChips(){
+  chipsEl.innerHTML=CHIP_LABELS.map((l,i)=>{
+    const cls=i===S.step?'cur':(i<=S.maxStep?'done':'');
+    return `<div class="chip ${cls}" data-i="${i}"><span class="n">${String(i+1).padStart(2,'0')}</span>${l}</div>`;
+  }).join("");
+  chipsEl.querySelectorAll('.chip.done').forEach(c=>{
+    c.onclick=()=>{cancelAnim(); S.step=+c.dataset.i; renderAll();};});
+}
+function renderPanel(){
+  const st=STEPS[S.step];
+  stepContent.innerHTML=
+   `<div class="stepEyebrow">${st.eyebrow}</div><h1 class="stepTitle">${st.title}</h1>`+st.html();
+  st.wire();
+  document.getElementById('left').scrollTop=0;
+}
+function renderAll(){renderChips(); renderPanel(); draw();}
+function resetAll(){freshState(); clearPlot(); 
+  showReadout('<span class="lbl">telemetry —\nawaiting first action…</span>');
+  renderAll();}
+document.getElementById('restart').onclick=resetAll;
+
+/* ============================================================
+   DASHBOARD MODULES  (read-only consumers of S + a shared sim clock —
+   they never modify the estimation math)
+============================================================ */
+const SIM={t0:performance.now(), rate:60};                 // 60 sim-seconds per real second
+function simSeconds(){return (performance.now()-SIM.t0)/1000*SIM.rate;}
+const DISP_INCL=28.5*Math.PI/180, DISP_RAAN=35*Math.PI/180; // display orbit-plane orientation (i, Ω)
+
+/* Keplerian elements from the planar 2D state (μ=1), with the display inclination/RAAN */
+function keplerFrom2D(X){
+  const rx=X[0],ry=X[1],vx=X[2],vy=X[3], r=Math.hypot(rx,ry), v2=vx*vx+vy*vy;
+  const a=1/(2/r - v2);                                    // vis-viva
+  const h=rx*vy-ry*vx;                                     // specific angular momentum (planar)
+  const ex=(vy*h)-rx/r, ey=(-vx*h)-ry/r, e=Math.hypot(ex,ey); // eccentricity vector (μ=1)
+  let w=Math.atan2(ey,ex); if(w<0)w+=2*Math.PI;            // argument of perigee (in-plane)
+  let nu=Math.atan2(ry,rx)-w; while(nu<0)nu+=2*Math.PI; while(nu>=2*Math.PI)nu-=2*Math.PI;
+  return {a,e,i:DISP_INCL,Om:DISP_RAAN,w,nu};
+}
+/* embed planar state into a 3D ECI frame using the display i, Ω (three.js Y = polar axis) */
+function eciFrom2D(X){
+  const ci=Math.cos(DISP_INCL),si=Math.sin(DISP_INCL),cO=Math.cos(DISP_RAAN),sO=Math.sin(DISP_RAAN);
+  const map=(x,y)=>{const bx=x,by=0,bz=-y;                 // base equatorial (x,0,-y)
+    const y1=by*ci-bz*si, z1=by*si+bz*ci;                  // Rx(i)
+    return [cO*bx+sO*z1, y1, -sO*bx+cO*z1];};              // Ry(Ω)
+  return {r:map(X[0],X[1]), v:map(X[2],X[3])};
+}
+
+/* ---- 3D Earth (Three.js). Canonical units: Earth radius = PLANET_R so the ortho
+   "2D" camera aligns pixel-for-pixel with the 2D orbit canvas drawn on top.
+   View modes:  '2d' → ortho face-on, only Earth+stars (orbits drawn by the 2D canvas);
+                '3d' → perspective, full 3D orbits.  Degrades to pure 2D if no WebGL. ---- */
+const OD3D=(function(){
+  let renderer,scene,orthoCam,perspCam,cam,earthGroup,earthMesh,orbitGroup,trueLine,refLine,estLine,sat,station,host,ok=false,view='2d';
+  let satX=null,satY=null,phi=0,lT=null,lR=null,lEstConv=false;
+  const ER=PLANET_R;                       // Earth radius = 2D planet radius (canonical)
+  const TEX='https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/planets/earth_atmos_2048.jpg';
+  function makeTex(){                       // procedural equirectangular fallback texture
+    const cw=1024,ch=512,c=document.createElement('canvas'); c.width=cw;c.height=ch; const x=c.getContext('2d');
+    const g=x.createLinearGradient(0,0,0,ch); g.addColorStop(0,'#0b3a6b');g.addColorStop(.5,'#13569a');g.addColorStop(1,'#0b3a6b');
+    x.fillStyle=g; x.fillRect(0,0,cw,ch); const rng=mulberry32(7); x.fillStyle='#3f7d4a';
+    for(let i=0;i<70;i++){const lx=rng()*cw,ly=ch*0.18+rng()*ch*0.64,r=10+rng()*72; x.globalAlpha=0.45+rng()*0.4;
+      x.beginPath();x.ellipse(lx,ly,r,r*(0.5+rng()*0.6),rng()*6.28,0,6.28);x.fill();}
+    x.globalAlpha=0.9; x.fillStyle='rgba(232,240,255,0.9)'; x.fillRect(0,0,cw,16); x.fillRect(0,ch-20,cw,20);
+    return new THREE.CanvasTexture(c);
+  }
+  function mkLine(color,dashed,op){
+    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(3),3));
+    const m=dashed?new THREE.LineDashedMaterial({color,dashSize:0.06,gapSize:0.04,transparent:true,opacity:op})
+                  :new THREE.LineBasicMaterial({color,transparent:true,opacity:op});
+    const l=new THREE.Line(g,m); l.frustumCulled=false; return l;
+  }
+  function setLine(l,pts){ const a=new Float32Array(pts.length*3);
+    for(let i=0;i<pts.length;i++){a[3*i]=pts[i][0]; a[3*i+1]=pts[i][1]; a[3*i+2]=0;}  // planar XY, canonical
+    l.geometry.setAttribute('position',new THREE.BufferAttribute(a,3));
+    if(l.material.isLineDashedMaterial)l.computeLineDistances(); l.geometry.computeBoundingSphere();
+  }
+  function init(){
+    if(typeof THREE==='undefined')return false;
+    host=document.getElementById('earth3d'); if(!host)return false;
+    const w=host.clientWidth||640,h=host.clientHeight||420;
+    try{ renderer=new THREE.WebGLRenderer({antialias:true}); }catch(e){ return false; }
+    renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1)); renderer.setClearColor(0x070A12,1);
+    host.appendChild(renderer.domElement);
+    scene=new THREE.Scene();
+    orthoCam=new THREE.OrthographicCamera(-1,1,1,-1,0.01,100); orthoCam.position.set(0,0,6); orthoCam.up.set(0,1,0); orthoCam.lookAt(0,0,0);
+    perspCam=new THREE.PerspectiveCamera(42,w/h,0.01,100); perspCam.position.set(0,2.2,2.9); perspCam.up.set(0,1,0); perspCam.lookAt(0,0,0);
+    cam=orthoCam;
+    scene.add(new THREE.AmbientLight(0x6a7894,0.95));
+    const dl=new THREE.DirectionalLight(0xbcd6ff,0.9); dl.position.set(-3,2,4); scene.add(dl);
+    earthGroup=new THREE.Group(); scene.add(earthGroup);
+    const mat=new THREE.MeshPhongMaterial({map:makeTex(),shininess:14,specular:0x21364f});
+    const ld=new THREE.TextureLoader(); ld.setCrossOrigin&&ld.setCrossOrigin('anonymous');
+    try{ ld.load(TEX, t=>{ mat.map=t; mat.needsUpdate=true; }, undefined, ()=>{}); }catch(e){}
+    earthMesh=new THREE.Mesh(new THREE.SphereGeometry(ER,48,36), mat); earthGroup.add(earthMesh);
+    earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(ER*1.004,28,18),
+      new THREE.MeshBasicMaterial({color:0x49b6d6,wireframe:true,transparent:true,opacity:0.10})));   // tactical graticule
+    scene.add(new THREE.Mesh(new THREE.SphereGeometry(ER*1.10,40,30),
+      new THREE.MeshBasicMaterial({color:0x5aa0ff,transparent:true,opacity:0.06,side:THREE.BackSide}))); // atmosphere
+    const N=900,pa=new Float32Array(N*3);
+    for(let i=0;i<N;i++){const rr=12+Math.random()*16,th=Math.random()*6.283,ph2=Math.acos(2*Math.random()-1);
+      pa[3*i]=rr*Math.sin(ph2)*Math.cos(th); pa[3*i+1]=rr*Math.cos(ph2); pa[3*i+2]=rr*Math.sin(ph2)*Math.sin(th);}
+    const sg=new THREE.BufferGeometry(); sg.setAttribute('position',new THREE.BufferAttribute(pa,3));
+    scene.add(new THREE.Points(sg,new THREE.PointsMaterial({color:0xE8ECF6,size:0.018,transparent:true,opacity:0.7})));
+    orbitGroup=new THREE.Group(); orbitGroup.rotation.x=DISP_INCL; orbitGroup.rotation.y=DISP_RAAN; scene.add(orbitGroup);
+    trueLine=mkLine(0x45D6C4,false,0.95); refLine=mkLine(0xFFB454,true,0.9); estLine=mkLine(0x7AA2F7,false,0.95);
+    orbitGroup.add(trueLine,refLine,estLine);
+    sat=new THREE.Mesh(new THREE.SphereGeometry(0.018,14,10),new THREE.MeshBasicMaterial({color:0x45D6C4}));
+    orbitGroup.add(sat);
+    station=new THREE.Mesh(new THREE.SphereGeometry(0.012,10,8),new THREE.MeshBasicMaterial({color:0xF5D76E}));
+    earthGroup.add(station);
+    ok=true; resize(); return true;
+  }
+  function resize(){ if(!ok)return; const w=host.clientWidth||640,h=host.clientHeight||420,m=Math.min(w,h),k=HALF*1.04;
+    renderer.setSize(w,h);
+    orthoCam.left=-w*k/m; orthoCam.right=w*k/m; orthoCam.top=h*k/m; orthoCam.bottom=-h*k/m; orthoCam.updateProjectionMatrix();
+    perspCam.aspect=w/h; perspCam.updateProjectionMatrix();
+  }
+  function setView(v){ view=(v==='3d')?'3d':'2d'; cam=(view==='3d')?perspCam:orthoCam; }
+  function update(){
+    if(!ok)return; const t=performance.now()/1000;
+    phi=t*(2*Math.PI/200); earthGroup.rotation.y=phi;        // slow Earth spin: 1 rev / 200 s
+    const sang=Math.atan2(STA[1],STA[0]); station.position.set(ER*Math.cos(sang),0,-ER*Math.sin(sang));
+    station.visible=(view==='3d');
+    if(S.truth&&S.truth.path&&S.truth.path!==lT){setLine(trueLine,S.truth.path); lT=S.truth.path;}
+    if(S.ref&&S.ref.path&&S.ref.path!==lR){setLine(refLine,S.ref.path); setLine(estLine,S.ref.path); lR=S.ref.path; lEstConv=false;}
+    if(S.converged&&S.truth&&S.truth.path&&!lEstConv){ setLine(estLine,S.truth.path); lEstConv=true; } // converged ⇒ estimate overlays truth
+    const v3=(view==='3d');
+    trueLine.visible=v3&&!!(S.truth&&S.truth.path);
+    refLine.visible=v3&&!!(S.ref&&S.ref.path); estLine.visible=v3&&!!S.converged;
+    refLine.material.opacity=S.converged?0.22:0.9;
+    let frac; const A=S.anim;
+    if(A&&A.type==='live') frac=Math.min(1,(performance.now()-A.t0)/A.dur);
+    else frac=(t/120)%1;                                    // very slow ambient orbit: 1 lap / 120 s
+    const path=S.truth&&S.truth.path;
+    if(path&&path.length>1){const idx=Math.min(path.length-1,Math.floor(frac*(path.length-1))),p=path[idx];
+      satX=p[0]; satY=p[1]; sat.position.set(p[0],p[1],0); sat.visible=v3;} else { sat.visible=false; satX=satY=null; }
+    renderer.render(scene,cam);
+  }
+  function satLatLon(){                                      // analytic sub-satellite lat/lon (Earth-fixed)
+    if(!ok||satX==null)return null;
+    const T=DISP_INCL,O=DISP_RAAN,x=satX,y=satY;
+    const ax=x, ay=y*Math.cos(T), az=y*Math.sin(T);          // Rx(i) on (x,y,0)
+    const wx=ax*Math.cos(O)+az*Math.sin(O), wz=-ax*Math.sin(O)+az*Math.cos(O), wy=ay; // Ry(Ω)
+    const r=Math.hypot(wx,wy,wz); if(r<1e-9)return null;
+    const lat=Math.asin(Math.max(-1,Math.min(1,wy/r)));
+    let lon=Math.atan2(wz,wx)-phi; lon=((lon+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;
+    return {lat,lon};
+  }
+  return {init,resize,update,satLatLon,setView,ready:()=>ok,view:()=>view};
+})();
+/* switch the central display between the flat 2D orbit view (default) and full 3D */
+function setOrbitView(v){
+  if(!EARTH3D_ON) v='2d';
+  if(OD3D.ready()) OD3D.setView(v);
+  const o=document.getElementById('orbit'); if(o) o.style.display=(v==='3d')?'none':'block';
+  document.querySelectorAll('#viewToggle .vbtn').forEach(b=>b.classList.toggle('sel', b.dataset.v===v));
+  const tag=document.getElementById('vizTag');
+  if(tag) tag.textContent=(v==='3d'?'3D TACTICAL DISPLAY · inclined orbit · ECI':'2D ORBIT VIEW · planar two-body · μ=1');
+  bgReady=false;
+}
+
+/* ---- UTC / GPS / Julian-date clocks ---- */
+const ODClock=(function(){
+  const eU=document.getElementById('ckUTC'),eG=document.getElementById('ckGPS'),eJ=document.getElementById('ckJD');
+  const p=(n,l)=>String(n).padStart(l||2,'0');
+  function update(){ if(!eU)return; const t=new Date();
+    eU.textContent=`${t.getUTCFullYear()}-${p(t.getUTCMonth()+1)}-${p(t.getUTCDate())} ${p(t.getUTCHours())}:${p(t.getUTCMinutes())}:${p(t.getUTCSeconds())}.${p(t.getUTCMilliseconds(),3)}`;
+    const gps=t.getTime()/1000-315964800+18, wk=Math.floor(gps/604800);   // GPS epoch 1980-01-06, +18 leap s
+    eG.textContent=`W${wk}:${(gps-wk*604800).toFixed(1)}`;
+    eJ.textContent=(2440587.5+t.getTime()/86400000).toFixed(5);
+  }
+  return {update};
+})();
+
+/* ---- telemetry ticker ---- */
+const ODLog=(function(){
+  const body=document.getElementById('tickerBody'); let n=0;
+  function push(text,level){ if(!body)return; const d=document.createElement('div');
+    d.className='tk-'+(level||'info'); const t=new Date();
+    d.textContent=`[${String(t.getUTCHours()).padStart(2,'0')}:${String(t.getUTCMinutes()).padStart(2,'0')}:${String(t.getUTCSeconds()).padStart(2,'0')}] > ${text}`;
+    body.appendChild(d); if(++n>140){body.removeChild(body.firstChild); n--;} body.scrollTop=body.scrollHeight;
+  }
+  return {push};
+})();
+function odlog(t,l){ try{ODLog.push(t,l);}catch(e){} }
+
+/* ---- live state-vector + Keplerian elements panel ---- */
+const ODPanel=(function(){
+  const panel=document.getElementById('elemPanel'),body=document.getElementById('elemBody');
+  const tab=document.getElementById('elemTab'),close=document.getElementById('elemClose');
+  if(tab)tab.onclick=()=>panel.classList.toggle('open');
+  if(close)close.onclick=()=>panel.classList.remove('open');
+  const f=(v,d)=>(v>=0?' ':'')+v.toFixed(d==null?4:d);
+  function row(k,t,e,scale){
+    let cls=''; if(e!=='—'){const dv=Math.abs(parseFloat(e)-parseFloat(t)); cls=dv>(scale||0.05)?'bigdiff':(dv>(scale||0.05)*0.15?'diff':'');}
+    return `<div class="ep-row"><span class="k">${k}</span><span class="t">${t}</span><span class="e ${cls}">${e}</span></div>`;
+  }
+  function update(){
+    if(!panel||!panel.classList.contains('open'))return;
+    const has=!!S.Xref0;
+    const Et=eciFrom2D(X_TRUE), Kt=keplerFrom2D(X_TRUE);
+    const Ee=has?eciFrom2D(S.Xref0):null, Ke=has?keplerFrom2D(S.Xref0):null;
+    const e=(v)=>has?f(v):'—', eD=(v,d)=>has?f(v,d):'—';
+    const D=180/Math.PI;
+    body.innerHTML=
+     `<div class="ep-sec">Cartesian state — canonical units (μ=1)</div>`+
+     `<div class="ep-row hdr"><span class="k"></span><span class="t">X(t) true</span><span class="e">X̂(t) est</span></div>`+
+     row('x', f(Et.r[0]), e(Ee&&Ee.r[0]))+ row('y', f(Et.r[1]), e(Ee&&Ee.r[1]))+ row('z', f(Et.r[2]), e(Ee&&Ee.r[2]))+
+     row('ẋ', f(Et.v[0]), e(Ee&&Ee.v[0]))+ row('ẏ', f(Et.v[1]), e(Ee&&Ee.v[1]))+ row('ż', f(Et.v[2]), e(Ee&&Ee.v[2]))+
+     `<div class="ep-sec">Keplerian elements</div>`+
+     `<div class="ep-row hdr"><span class="k"></span><span class="t">true</span><span class="e">est</span></div>`+
+     row('a', f(Kt.a,4), eD(Ke&&Ke.a,4),0.02)+
+     row('e', f(Kt.e,4), eD(Ke&&Ke.e,4),0.01)+
+     row('i', f(Kt.i*D,2), eD(Ke&&Ke.i*D,2),0.5)+
+     row('Ω', f(Kt.Om*D,2), eD(Ke&&Ke.Om*D,2),0.5)+
+     row('ω', f(Kt.w*D,2), eD(Ke&&Ke.w*D,2),1)+
+     row('ν', f(Kt.nu*D,2), eD(Ke&&Ke.nu*D,2),2)+
+     `<div class="ep-sec" style="color:var(--mut)">deg for i, Ω, ω, ν · highlight = est − true gap</div>`;
+  }
+  return {update};
+})();
+
+/* ---- ground-track minimap: white equirectangular world map + a fast, free-running
+   ground track (decoupled from the slow satellite — sped up for a readable flow) ---- */
+const ODGround=(function(){
+  const cv=document.getElementById('gtrack'); if(!cv)return {update:()=>{}};
+  const cx=cv.getContext('2d'); let trail=[];
+  const SPEEDX=20;                                  // playback speed-up vs the live satellite
+  // stylised continents: [lon°, lat°, lon-radius°, lat-radius°]
+  const CONTS=[[-100,46,27,17],[-62,-18,13,22],[18,6,20,28],[15,54,15,9],[96,48,42,22],[134,-26,16,11],[-42,72,15,8]];
+  function fit(){const d=window.devicePixelRatio||1,r=cv.getBoundingClientRect();
+    cv.width=Math.max(2,r.width*d); cv.height=Math.max(2,r.height*d); cx.setTransform(d,0,0,d,0,0); return r;}
+  const PX=(lon,W)=>(lon/(2*Math.PI)+0.5)*W;        // equirectangular: lon rad → x
+  const PY=(lat,H)=>(0.5-lat/Math.PI)*H;            //                   lat rad → y
+  function subSat(){                                 // fast, free-running sub-satellite point
+    const path=S.truth&&S.truth.path; if(!path||path.length<2)return null;
+    const tf=performance.now()/1000, frac=(tf/6)%1;  // 1 orbit / 6 s (fast)
+    const p=path[Math.min(path.length-1,Math.floor(frac*(path.length-1)))];
+    const x=p[0],y=p[1],T=DISP_INCL,O=DISP_RAAN;
+    const ax=x, ay=y*Math.cos(T), az=y*Math.sin(T);
+    const wx=ax*Math.cos(O)+az*Math.sin(O), wz=-ax*Math.sin(O)+az*Math.cos(O), wy=ay;
+    const r=Math.hypot(wx,wy,wz); if(r<1e-9)return null;
+    const lat=Math.asin(Math.max(-1,Math.min(1,wy/r)));
+    let lon=Math.atan2(wz,wx)-(tf*2*Math.PI/90);     // fast Earth rotation → westward precession
+    lon=((lon+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;
+    return {lat,lon};
+  }
+  function update(){
+    const R=fit(),W=R.width,H=R.height; cx.clearRect(0,0,W,H);
+    cx.fillStyle="rgba(10,16,30,0.5)"; cx.fillRect(0,0,W,H);
+    cx.fillStyle="rgba(222,233,250,0.15)";            // white equirectangular landmasses
+    for(const c of CONTS){ cx.beginPath();
+      cx.ellipse(PX(c[0]*Math.PI/180,W),PY(c[1]*Math.PI/180,H),c[2]/360*W,c[3]/180*H,0,0,6.283); cx.fill(); }
+    cx.strokeStyle="rgba(70,100,150,0.20)"; cx.lineWidth=0.6;
+    for(let l=-60;l<=60;l+=30){const y=PY(l*Math.PI/180,H); cx.beginPath();cx.moveTo(0,y);cx.lineTo(W,y);cx.stroke();}
+    for(let lo=-120;lo<=120;lo+=60){const x=PX(lo*Math.PI/180,W); cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,H);cx.stroke();}
+    cx.strokeStyle="rgba(122,162,247,0.45)"; cx.lineWidth=0.8; cx.strokeRect(0.5,0.5,W-1,H-1);
+    const ll=subSat();
+    if(ll){ trail.push(ll); if(trail.length>520)trail.shift();
+      cx.strokeStyle="rgba(69,214,196,0.85)"; cx.lineWidth=1.3; cx.beginPath(); let st=false;
+      trail.forEach((q,i)=>{const x=PX(q.lon,W),y=PY(q.lat,H);
+        if(!st){cx.moveTo(x,y);st=true;}
+        else{const px=PX(trail[i-1].lon,W); if(Math.abs(px-x)>W*0.5)cx.moveTo(x,y); else cx.lineTo(x,y);} });
+      cx.stroke();
+      const x=PX(ll.lon,W),y=PY(ll.lat,H);
+      cx.fillStyle="#45D6C4"; cx.beginPath();cx.arc(x,y,2.6,0,6.283);cx.fill();
+      cx.strokeStyle="rgba(69,214,196,0.5)"; cx.beginPath();cx.arc(x,y,5,0,6.283);cx.stroke();
+    } else trail=[];
+    cx.fillStyle="rgba(150,180,220,0.9)"; cx.font="8px "+getCSS('--mono'); cx.textAlign="left";
+    cx.fillText("GROUND TRACK · "+SPEEDX+"× SPEED",5,11);
+  }
+  return {update};
+})();
+
+/* ---- minimalist WebAudio cues (no external files) ---- */
+const ODSound=(function(){
+  let ctx=null, enabled=true;
+  function ac(){ if(!ctx){ try{ ctx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ ctx=null; } } return ctx; }
+  function beep(freq,dur,type,gain,t0){ const c=ac(); if(!c||!enabled)return;
+    const o=c.createOscillator(), g=c.createGain(); o.type=type||'sine'; o.frequency.value=freq;
+    const t=t0||c.currentTime; g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(gain||0.045,t+0.008); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(c.destination); o.start(t); o.stop(t+dur+0.02); }
+  return {
+    resume(){ const c=ac(); if(c&&c.state==='suspended')c.resume(); },
+    click(){ beep(640,0.05,'triangle',0.03); },
+    converge(){ const c=ac(); if(!c||!enabled)return; const b=c.currentTime;
+      [523.25,659.25,783.99,1046.50].forEach((f,i)=>beep(f,0.55,'sine',0.05,b+i*0.10)); },  // rising major chime
+    toggle(){ enabled=!enabled; return enabled; },
+    isOn(){ return enabled; }
+  };
+})();
+
+/* one combined per-frame update for all dashboard modules (called from the render loop) */
+function ODFrame(){ ODClock.update(); OD3D.update(); ODGround.update(); ODPanel.update(); }
+
+/* boot */
+requestAnimationFrame(loop);   // start the persistent, self-healing 60 fps render loop FIRST
+try{ renderAll(); clearPlot("run the tracking pass to begin"); }catch(e){ console.error(e); }
+// 3D Earth behind the orbit view (falls back to the full 2D canvas if WebGL is unavailable)
+const _3dOK = (function(){ try{ return OD3D.init(); }catch(e){ console.error(e); return false; } })();
+EARTH3D_ON=_3dOK;                          // 2D orbit canvas renders transparently over the 3D Earth
+if(_3dOK){ setOrbitView('2d'); }           // default = clear 2D orbit view, textured 3D Earth behind
+else { const vt=document.getElementById('viewToggle'); if(vt)vt.style.display='none'; }
+// wire the 2D/3D toggle
+(function(){ const vt=document.getElementById('viewToggle'); if(!vt||!_3dOK)return;
+  vt.querySelectorAll('.vbtn').forEach(b=>{ b.onclick=()=>setOrbitView(b.dataset.v); }); })();
+bgReady=false;
+// sound: click cue on any control, mute toggle in the header
+document.addEventListener('click',e=>{
+  if(e.target.closest('button,.pill,.tab,.vbtn,.chip.done,.opt,summary')){ ODSound.resume(); ODSound.click(); }
+});
+(function(){ const mb=document.getElementById('muteBtn'); if(!mb)return;
+  mb.onclick=()=>{ const on=ODSound.toggle(); mb.textContent=on?'🔊':'🔇'; mb.classList.toggle('off',!on); }; })();
+ODLog.push('OD console online — '+(_3dOK?'2D orbit view · 3D textured Earth':'2D fallback display'), 'ok');
+ODLog.push('Awaiting tracking pass. Select sensor & noise model, then run.', 'info');
+// re-measure once layout/fonts settle, and on every resize (covers a 0-size first measurement)
+addEventListener('load',  ()=>{RO=fit(cvO);RP=fit(cvP);bgReady=false; if(_3dOK)OD3D.resize();});
+addEventListener('resize',()=>{RO=fit(cvO);RP=fit(cvP);bgReady=false; if(_3dOK)OD3D.resize();});
+/* dismiss the loading screen once the first frames are up */
+(function(){
+  const bar=document.getElementById('bootBar'), pct=document.getElementById('bootPct'), ov=document.getElementById('boot');
+  if(!ov)return; let p=0;
+  const id=setInterval(()=>{ p=Math.min(100,p+Math.random()*15+5); bar.style.width=p+'%'; pct.textContent=Math.round(p)+'%';
+    if(p>=100){ clearInterval(id); setTimeout(()=>{ ov.classList.add('hide'); RO=fit(cvO);RP=fit(cvP);bgReady=false;
+      setTimeout(()=>ov.remove(),650); }, 220); } }, 95);
+})();
+</script>
+</body>
+</html>
