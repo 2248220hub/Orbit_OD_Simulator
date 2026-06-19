@@ -267,16 +267,19 @@ h1.stepTitle{font-family:var(--serif); font-size:21px; font-weight:700; line-hei
   letter-spacing:.12em; padding:5px 16px; cursor:pointer; transition:all .15s;}
 #viewToggle .vbtn:hover{color:var(--txt);}
 #viewToggle .vbtn.sel{background:var(--ref); color:var(--bg); font-weight:600;}
-/* ---------- telemetry ticker (transparent terminal overlay on the orbit view) ---------- */
-#ticker{position:absolute; left:0; right:232px; bottom:6px; z-index:3; height:78px; pointer-events:none;}
+/* ---------- telemetry ticker (transparent terminal overlay — scrollable) ---------- */
+#ticker{position:absolute; left:0; right:232px; bottom:6px; z-index:3; height:104px; pointer-events:none;}
 #ticker::before{content:"TELEMETRY"; position:absolute; top:-13px; left:12px;
   font-family:var(--mono); font-size:8.5px; letter-spacing:.2em; color:#3A4663;}
-#tickerBody{height:100%; overflow:hidden; padding:0 12px; font-family:var(--mono); font-size:11px; line-height:1.5;
-  display:flex; flex-direction:column; justify-content:flex-end;
-  -webkit-mask-image:linear-gradient(to bottom, transparent, #000 30%); mask-image:linear-gradient(to bottom, transparent, #000 30%);}
+#tickerBody{height:100%; overflow-y:auto; overflow-x:hidden; padding:0 12px; pointer-events:auto;
+  font-family:var(--mono); font-size:11px; line-height:1.5;
+  -webkit-mask-image:linear-gradient(to bottom, transparent, #000 14%); mask-image:linear-gradient(to bottom, transparent, #000 14%);}
 #tickerBody div{white-space:pre-wrap; word-break:break-word; text-shadow:0 0 5px #000,0 0 3px #000;}
+#tickerBody::-webkit-scrollbar{width:6px;}
+#tickerBody::-webkit-scrollbar-thumb{background:rgba(122,162,247,.35); border-radius:3px;}
+#tickerBody::-webkit-scrollbar-track{background:transparent;}
 .tk-info{color:#8FD3E8;} .tk-ok{color:var(--ok);} .tk-warn{color:var(--ref);} .tk-err{color:var(--bad);} .tk-dim{color:#6A748E;}
-@media (max-width:880px){ #clocks{display:none;} #ticker{right:0; height:60px;} #elemPanel{width:88%;} }
+@media (max-width:880px){ #clocks{display:none;} #ticker{right:0; height:74px;} #elemPanel{width:88%;} }
 </style>
 </head>
 <body>
@@ -489,7 +492,16 @@ function freshState(){
      Xref0:null, ref:null, ghosts:[],
      resid:null, Lam:null, Nv:null, xhat:null, P:null,
      iters:[], converged:false, diverged:false,
-     anim:null, rafId:null, stmManual:null};
+     anim:null, rafId:null, stmManual:null, iterAnim:null};
+}
+/* resample two orbit paths to a common length and linearly blend them (for smooth iteration morph) */
+function lerpPath(from,to,t){
+  const N=240, out=new Array(N+1);
+  for(let i=0;i<=N;i++){const f=i/N;
+    const a=from[Math.min(from.length-1,Math.round(f*(from.length-1)))];
+    const b=to[Math.min(to.length-1,Math.round(f*(to.length-1)))];
+    out[i]=[a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t];}
+  return out;
 }
 freshState();
 
@@ -643,7 +655,7 @@ function getCSS(v){return _cssCache[v]!==undefined?_cssCache[v]
 /* stop any in-flight animation: drop the descriptor AND kill the RAF loop */
 function cancelAnim(){
   if(S.rafId){cancelAnimationFrame(S.rafId); S.rafId=null;}
-  S.anim=null;
+  S.anim=null; S.iterAnim=null;
   S.stmManual=null;   // clear any manual Φ scrub so steps never reopen on a half-drawn orbit
 }
 /* manual Φ scrub (Step 3): slider 0..1 drives the same fraction draw() uses */
@@ -718,8 +730,13 @@ function draw(ts){
     const col=S.converged?getCSS('--est'):getCSS('--ref');
     // once converged X̂≈X, so the estimate ring overlays the true ring exactly (the residual
     // along the weakly-observed direction is reported by the covariance ellipse + readout instead)
-    const orbitPathToDraw=(S.converged&&S.truth&&S.truth.path)?S.truth.path:S.ref.path;
-    drawPath(orbitPathToDraw,col,S.converged?null:[7,6],1,refFrac);
+    let orbitPathToDraw=(S.converged&&S.truth&&S.truth.path)?S.truth.path:S.ref.path;
+    if(S.iterAnim){                                   // smooth morph from old → new reference each iteration
+      const tt=Math.min(1,(ts-S.iterAnim.t0)/S.iterAnim.dur), te=tt*tt*(3-2*tt);
+      orbitPathToDraw=lerpPath(S.iterAnim.from,S.iterAnim.to,te);
+      if(tt>=1)S.iterAnim=null;
+    }
+    drawPath(orbitPathToDraw,col,(S.converged&&!S.iterAnim)?null:[7,6],1,refFrac);
     if(refFrac>=1){const p0=[S.Xref0[0],S.Xref0[1]]; dot(p0,col,4);
       c.save(); c.strokeStyle=col; c.lineWidth=1.4; const[x,y]=w2c(p0); c.beginPath(); c.arc(x,y,8,0,6.283); c.stroke(); c.restore();}
     if(refFrac<1&&((A&&A.type==='stm')||(S.step===2&&S.stmManual!=null))){
@@ -1644,7 +1661,12 @@ const STEPS=[
   ${S.converged?nextBtn():''}`;},
  wire(){
   wireFilterSelector();
-  const run=()=>{oneIteration(); renderPanel(); draw(); plotConvergence();
+  const run=()=>{
+    const oldPath=(S.ref&&S.ref.path)?S.ref.path.slice():null;   // capture before the step
+    oneIteration();
+    const newPath=(S.converged&&S.truth&&S.truth.path)?S.truth.path:(S.ref&&S.ref.path);
+    if(oldPath&&newPath&&!S.diverged) S.iterAnim={t0:performance.now(),dur:520,from:oldPath,to:newPath}; // smooth morph
+    renderPanel(); draw(); plotConvergence();
     const last=S.iters[S.iters.length-1];
     showReadout(`<span class="lbl">iteration ${S.iters.length} · ${S.filterType}</span>\n`+
      `  ‖x̂₀‖ = <span class="hi">${last.n.toExponential(2)}</span>\n`+
@@ -1843,6 +1865,8 @@ const OD3D=(function(){
     trueLine.visible=v3&&!!(S.truth&&S.truth.path);
     refLine.visible=v3&&!!(S.ref&&S.ref.path); estLine.visible=v3&&!!S.converged;
     refLine.material.opacity=S.converged?0.22:0.9;
+    if(S.iterAnim){ const tt=Math.min(1,(performance.now()-S.iterAnim.t0)/S.iterAnim.dur), te=tt*tt*(3-2*tt);
+      setLine(refLine,lerpPath(S.iterAnim.from,S.iterAnim.to,te)); refLine.visible=v3; lR=null; } // smooth morph in 3D
     let frac; const A=S.anim;
     if(A&&A.type==='live') frac=Math.min(1,(performance.now()-A.t0)/A.dur);
     else frac=(t/120)%1;                                    // very slow ambient orbit: 1 lap / 120 s
@@ -1941,8 +1965,11 @@ const ODGround=(function(){
   const cv=document.getElementById('gtrack'); if(!cv)return {update:()=>{}};
   const cx=cv.getContext('2d'); let trail=[];
   const SPEEDX=20;                                  // playback speed-up vs the live satellite
-  // stylised continents: [lon°, lat°, lon-radius°, lat-radius°]
-  const CONTS=[[-100,46,27,17],[-62,-18,13,22],[18,6,20,28],[15,54,15,9],[96,48,42,22],[134,-26,16,11],[-42,72,15,8]];
+  // stylised continents as ellipse blobs: [lon°, lat°, lon-radius°, lat-radius°]
+  const CONTS=[[-100,46,27,16],[-85,55,18,12],[-42,72,14,8],[-62,-18,12,22],[-68,3,8,9],
+    [18,6,20,22],[24,-28,10,9],[12,52,16,9],[20,63,9,7],[45,28,12,9],
+    [92,56,46,15],[78,22,9,11],[108,12,12,8],[116,35,14,12],[134,-26,15,10],[140,38,4,7]];
+  const isLand=(lo,la)=>{ for(const c of CONTS){ const u=(lo-c[0])/c[2],v=(la-c[1])/c[3]; if(u*u+v*v<=1)return true; } return false; };
   function fit(){const d=window.devicePixelRatio||1,r=cv.getBoundingClientRect();
     cv.width=Math.max(2,r.width*d); cv.height=Math.max(2,r.height*d); cx.setTransform(d,0,0,d,0,0); return r;}
   const PX=(lon,W)=>(lon/(2*Math.PI)+0.5)*W;        // equirectangular: lon rad → x
@@ -1963,9 +1990,11 @@ const ODGround=(function(){
   function update(){
     const R=fit(),W=R.width,H=R.height; cx.clearRect(0,0,W,H);
     cx.fillStyle="rgba(10,16,30,0.5)"; cx.fillRect(0,0,W,H);
-    cx.fillStyle="rgba(222,233,250,0.15)";            // white equirectangular landmasses
-    for(const c of CONTS){ cx.beginPath();
-      cx.ellipse(PX(c[0]*Math.PI/180,W),PY(c[1]*Math.PI/180,H),c[2]/360*W,c[3]/180*H,0,0,6.283); cx.fill(); }
+    // dotted world-map texture (light stipple over the land mask — blends into the dark UI)
+    cx.fillStyle="rgba(205,222,248,0.22)"; const SP=4;
+    for(let px=2;px<W;px+=SP){ const lon=(px/W-0.5)*360;
+      for(let py=2;py<H;py+=SP){ const lat=(0.5-py/H)*180;
+        if(isLand(lon,lat)){ cx.beginPath(); cx.arc(px,py,0.9,0,6.283); cx.fill(); } } }
     cx.strokeStyle="rgba(70,100,150,0.20)"; cx.lineWidth=0.6;
     for(let l=-60;l<=60;l+=30){const y=PY(l*Math.PI/180,H); cx.beginPath();cx.moveTo(0,y);cx.lineTo(W,y);cx.stroke();}
     for(let lo=-120;lo<=120;lo+=60){const x=PX(lo*Math.PI/180,W); cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,H);cx.stroke();}
