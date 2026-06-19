@@ -1,5 +1,7 @@
 # OD Console — Orbit Determination Simulator
 
+> **Live demo:** [https://2248220hub.github.io/orbit_od_simulator/](https://2248220hub.github.io/orbit_od_simulator/)
+
 An interactive, single-file **orbit determination** simulator with a cyber-industrial
 tactical UI: a 3D textured Earth, live 2D/3D orbit views, a guided 8-stage estimation
 journey, and seven real estimators (batch **and** sequential) sharing one validated
@@ -12,19 +14,19 @@ two-body engine.
 
 ## ✦ Features
 
-- **3D textured Earth** (Three.js) with a slow, calm rotation and a tactical wireframe graticule.
-- **2D / 3D view toggle** — default flat 2D orbit view for clarity; switch to an inclined 3D view.
-- **Seven estimators**, batch and sequential, on one planar two-body model:
+- 🌍 **3D textured Earth** (Three.js) with a slow, calm rotation and a tactical wireframe graticule.
+- 🔭 **2D / 3D view toggle** — default flat 2D orbit view for clarity; switch to an inclined 3D view.
+- ⚙️ **Seven estimators**, batch and sequential, on one planar two-body model:
   LS · WLS · WLS+a priori · MVE · MVE+a priori · Kalman · Extended Kalman.
-- **Guided 8-stage journey** from problem setup → first guess → STM → residuals → normal
+- 🗺️ **Guided 8-stage journey** from problem setup → first guess → STM → residuals → normal
   equations → solve → iterate → results.
-- **Live state-vector & Keplerian panel** (glassmorphism) comparing **true vs estimated** state.
-- **Mission clocks** — UTC, GPS (week:sec), and Julian Date, ticking live with a LIVE-synced dot.
-- **Telemetry ticker** — colour-coded engine log streamed over the orbit view.
-- **Ground-track minimap** — Mercator sub-satellite trace.
-- **Covariance analysis** — 1σ, correlations, condition number, trace, log-determinant,
+- 📡 **Live state-vector & Keplerian panel** (glassmorphism) comparing **true vs estimated** state.
+- 🕐 **Mission clocks** — UTC, GPS (week:sec), and Julian Date, ticking live with a LIVE-synced dot.
+- 📺 **Telemetry ticker** — colour-coded engine log streamed over the orbit view.
+- 🗾 **Ground-track minimap** — Mercator sub-satellite trace.
+- 📊 **Covariance analysis** — 1σ, correlations, condition number, trace, log-determinant,
   consistency check, and a prior-vs-posterior covariance ellipse.
-- **Coherent UI** — changing sensor, noise model, estimator, or prior live-updates the plots.
+- 🔄 **Coherent UI** — changing sensor, noise model, estimator, or prior live-updates the plots.
 
 ---
 
@@ -83,10 +85,10 @@ coloured noise leaves wRMS biased — the UI warns when this happens.
 
 ## ✦ Plots & readouts
 
-- **Pre-fit residuals** — connected line exposing the systematic signature of the state error.
-- **Post-fit residuals** — scatter that should collapse to noise; the title states wRMS honestly.
-- **‖x̂₀‖ per iteration** — log-scale convergence with the ε threshold.
-- **Covariance block** — 1σ uncertainties, six correlation coefficients, `cond(Λ)`, `tr(P)`,
+- 📈 **Pre-fit residuals** — connected line exposing the systematic signature of the state error.
+- 📉 **Post-fit residuals** — scatter that should collapse to noise; the title states wRMS honestly.
+- 🔁 **‖x̂₀‖ per iteration** — log-scale convergence with the ε threshold.
+- 🔲 **Covariance block** — 1σ uncertainties, six correlation coefficients, `cond(Λ)`, `tr(P)`,
   `log₁₀|P|`, and a consistency check (is truth within 3σ?).
 
 `wRMS = √( Σ εᵢ²/σ² / m )` → **≈ 1** means residuals reached the noise floor.
@@ -108,18 +110,20 @@ coloured noise leaves wRMS biased — the UI warns when this happens.
 
 ## ✦ Run & host
 
-**Locally:** open `OD_Simulator.html` in any modern browser (hard-refresh with Ctrl/⌘+Shift+R after updates).
+- 💻 **Locally:** open `OD_Simulator.html` in any modern browser (hard-refresh with Ctrl/⌘+Shift+R after updates).
 
-**Publish to GitHub Pages:** run `push.bat` (Windows) — it copies the file to `index.html`,
+- 🌐 **Shareable link:** [https://2248220hub.github.io/orbit_od_simulator/](https://2248220hub.github.io/orbit_od_simulator/) — hosted on GitHub Pages, always up to date with the `main` branch.
+
+- 📦 **Publish to GitHub Pages:** run `push.bat` (Windows) — it copies the file to `index.html`,
 commits, and pushes to your repo. Then enable **Settings → Pages → Branch: main / root**.
 
 ---
 
 ## ✦ Technical notes
 
-- Pure two-body dynamics (`μ = 1`), planar state `[x, y, ẋ, ẏ]`, RK4 propagation with the 20-D STM.
-- Keplerian elements (`a, e, i, Ω, ω, ν`) are derived from the planar state; `i`/`Ω` are display values for the 3D view.
-- All linear algebra (Gaussian elimination, Cholesky, 4×4 inverse, power-iteration condition number) is hand-rolled — no math libraries.
-- Single file (~110 KB). Only external dependency: Three.js (CDN) for the 3D Earth, with a procedural 2D fallback.
+- 🛰️ Pure two-body dynamics (`μ = 1`), planar state `[x, y, ẋ, ẏ]`, RK4 propagation with the 20-D STM.
+- 🔑 Keplerian elements (`a, e, i, Ω, ω, ν`) are derived from the planar state; `i`/`Ω` are display values for the 3D view.
+- 🧮 All linear algebra (Gaussian elimination, Cholesky, 4×4 inverse, power-iteration condition number) is hand-rolled — no math libraries.
+- 📄 Single file (~110 KB). Only external dependency: Three.js (CDN) for the 3D Earth, with a procedural 2D fallback.
 
 *Educational simulator — not for operational navigation.*
