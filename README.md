@@ -8,7 +8,7 @@ two-body engine.
 > 📦 Single `.html` file · no build step · runs in any modern browser.
 > 🌐 The 3D Earth uses Three.js from a CDN (first load needs internet); everything else is offline.
 
-**🔗 Live demo:** `[https://2248220hub.github.io/Orbit_OD_Simulator/]`
+**🔗 Live demo:** [https://2248220hub.github.io/Orbit_OD_Simulator/](https://2248220hub.github.io/Orbit_OD_Simulator/)
 
 ---
 
