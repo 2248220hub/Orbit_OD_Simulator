@@ -118,14 +118,96 @@ details.qa .ans{padding:2px 16px 14px 34px;font-size:15.6px;color:var(--ink-soft
 .nores{color:var(--muted);font-style:italic;padding:10px 20px;font-size:14px}
 svg.fig{width:100%;height:auto;display:block;background:#fff;border:1px solid var(--line);border-radius:8px;margin:16px 0}
 .fig-cap{font-size:13.5px;color:var(--muted);font-style:italic;text-align:center;margin:-8px 0 18px}
-@media(max-width:900px){#sidebar{display:none}#main{padding:22px 18px 100px}#progressbar{left:0}}
+
+/* ---------- sidebar toggle ---------- */
+#navOpen{display:none;position:fixed;top:12px;left:12px;z-index:82;width:40px;height:40px;
+  border-radius:10px;border:1px solid var(--line-strong);background:var(--surface);cursor:pointer;
+  flex-direction:column;justify-content:center;align-items:center;gap:4px;box-shadow:var(--shadow);padding:0}
+#navOpen span{display:block;width:17px;height:2px;background:var(--ink-soft);border-radius:2px}
+#navOpen:hover{background:var(--surface-2)}
+body.nav-closed #navOpen{display:flex}
+#navClose{position:absolute;top:16px;right:14px;width:28px;height:28px;border-radius:7px;
+  border:1px solid var(--line-strong);background:var(--surface);color:var(--ink-soft);cursor:pointer;
+  font-family:var(--serif);font-size:15px;line-height:1;padding:0}
+#navClose:hover{background:#ece5da;color:var(--accent)}
+#navScrim{display:none;position:fixed;inset:0;background:rgba(40,32,24,.38);z-index:74}
+body.nav-closed #sidebar{display:none}
+body.nav-closed #progressbar{left:0}
+body.nav-closed #main{padding-left:66px}
+
+/* ---------- responsive ---------- */
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:16px 0}
+.tbl-wrap table{margin:0}
+@media(max-width:1150px){#main{padding:30px 30px 120px}body.nav-closed #main{padding-left:62px}}
+@media(max-width:900px){
+  :root{--sidebar-w:280px}
+  #sidebar{position:fixed;top:0;left:0;z-index:76;box-shadow:0 0 44px rgba(40,32,24,.28)}
+  body:not(.nav-closed) #navScrim{display:block}
+  #progressbar{left:0}
+  #main{max-width:100%;padding:60px 16px 90px}
+  body.nav-closed #main{padding-left:16px}
+  body{font-size:16px;line-height:1.62}
+  .hero{padding:22px 18px;border-radius:12px}
+  .hero h1{font-size:29px}
+  .hero .sub{font-size:15.5px}
+  .hero .stats{gap:18px}
+  .hero .stat b{font-size:20px}
+  h2.sec-h{font-size:25px;gap:9px}
+  h3{font-size:19px;margin-top:28px}
+  .sec-sub{font-size:15px}
+  .controls{grid-template-columns:1fr;gap:8px}
+  .cards{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+  table{font-size:14.2px}
+  th,td{padding:7px 9px}
+  .tbl-wrap table{min-width:460px}
+  .eq{font-size:14px;padding:11px 10px}
+  details.qa summary{font-size:15px;padding:10px 12px}
+  details.qa .ans{padding:2px 13px 12px 28px;font-size:15px}
+  .callout{font-size:15.2px;padding:12px 13px}
+}
+@media(max-width:560px){
+  #main{padding:58px 11px 80px}
+  body.nav-closed #main{padding-left:11px}
+  body{font-size:15.5px}
+  .hero{padding:18px 14px}
+  .hero h1{font-size:24px}
+  .hero .stats{gap:14px}
+  h2.sec-h{font-size:21px;flex-wrap:wrap}
+  h3{font-size:17.5px}
+  .cards{grid-template-columns:1fr}
+  .panel-body{padding:11px}
+  .panel-head{padding:9px 12px}
+  .panel-head h4{font-size:15px}
+  .eq{font-size:12.8px;padding:9px 8px}
+  button.btn,select{font-size:13px;padding:4px 9px}
+  .btnrow{gap:6px}
+  .pill{font-size:12.5px;padding:2px 9px}
+  .legend{font-size:12px;gap:10px}
+  .readout{font-size:13.8px;padding:9px 10px}
+  .tbl-wrap table{min-width:420px}
+  table{font-size:13.5px}
+  .grid2{gap:10px}
+}
+@media(max-width:380px){
+  .hero h1{font-size:21px}
+  h2.sec-h{font-size:19px}
+  .tbl-wrap table{min-width:340px}
+}
+@media(hover:none){
+  #sidebar a{padding-top:8px;padding-bottom:8px}
+  button.btn,select{padding:7px 12px}
+  input[type=range]{height:28px}
+}
+
 </style>
 </head>
 <body>
 <div id="progressbar"><div></div></div>
+<button id="navOpen" aria-label="Show contents" aria-expanded="false"><span></span><span></span><span></span></button>
+<div id="navScrim"></div>
 <div id="shell">
 <nav id="sidebar">
-  <div class="brand"><h1>Earth Observation</h1><p>Oral exam — interactive deck</p></div>
+  <div class="brand"><h1>Earth Observation</h1><p>Oral exam — interactive deck</p><button id="navClose" aria-label="Hide contents" title="Hide contents">&#10094;</button></div>
   <input id="navsearch" type="search" placeholder="Filter topics…" autocomplete="off">
   <div id="navlist"></div>
 </nav>
@@ -144,7 +226,7 @@ svg.fig{width:100%;height:auto;display:block;background:#fff;border:1px solid va
 </div>
 
 <div class="callout c-intu"><span class="lab">How to use this in one week</span>
-<p><strong>Days 1–2:</strong> §1–§6 (waves, polarization, Fresnel, roughness, black body, radiometry) — this is the physics everything else rests on. <strong>Days 3–4:</strong> §7–§11 (descriptors, radiative transfer, scattering, apparent brightness, scatterometer). <strong>Day 5:</strong> §12–§17 (optics, SAR, speckle, PolSAR, InSAR). <strong>Day 6:</strong> §18–§19 + the full <a class="inline" href="#s-qa">Exam Q&amp;A bank</a>. <strong>Day 7:</strong> only the <a class="inline" href="#s-flash">flashcards</a> and the <a class="inline" href="#s-cheat">one-page cheat sheet</a>.</p></div>
+<p><strong>Days 1–2:</strong> topics 1–6 (waves, polarization, Fresnel, roughness, black body, radiometry) — this is the physics everything else rests on. <strong>Days 3–4:</strong> topics 7–11 (descriptors, radiative transfer, scattering, apparent brightness, scatterometer). <strong>Day 5:</strong> topics 12–17 (optics, SAR, speckle, PolSAR, InSAR). <strong>Day 6:</strong> topics 18–19 + the full <a class="inline" href="#s-qa">Exam Q&amp;A bank</a>. <strong>Day 7:</strong> only the <a class="inline" href="#s-flash">flashcards</a> and the <a class="inline" href="#s-cheat">one-page cheat sheet</a>.</p></div>
 
 <!-- ============ 1. PROPAGATION ============ -->
 <section class="sec" id="s-prop" data-title="Propagation in a lossy medium" data-group="Part I — Waves &amp; Matter">
@@ -1298,7 +1380,7 @@ svg.fig{width:100%;height:auto;display:block;background:#fff;border:1px solid va
 <p>Point-by-point correlation of the PRE and POST signals — how much the <strong>phase matches</strong> between before and after. <strong>High coherence</strong> if the scattering is stable (same scatterers before and after); <strong>low coherence</strong> if the scattering changes. Causes: obvious terrain changes, vegetation, water, or terrain with different <strong>dielectric properties</strong>. In our case, areas subject to <strong>ground surface slumps</strong> (to be verified with InSAR).</p>
 
 <h3>Slides 9–10 — NRCS</h3>
-<p><strong>Bright areas</strong> = increased backscattering. <strong>Dark areas</strong> = less backscattering. See <a class="inline" href="#s-nrcs">§18</a> for the full VV/VH comparison used here.</p>
+<p><strong>Bright areas</strong> = increased backscattering. <strong>Dark areas</strong> = less backscattering. See <a class="inline" href="#s-nrcs">topic 18</a> for the full VV/VH comparison used here.</p>
 <p>The <strong>difference is calculated on a logarithmic scale</strong> (dB — because speckle is multiplicative, a log difference is a ratio), applying <strong>multi-looking filters</strong> to remove noise, and setting a <strong>threshold</strong> to highlight the changes.</p>
 
 <div class="callout c-exam"><span class="lab">Rehearse this 60-second summary</span><p>"We picked two Sentinel-1B <strong>SLC IW ascending</strong> scenes over Greece with the same UTC sensing time, split a single swath of four bursts around the epicentre, formed the interferogram removing the flat-Earth phase, filtered it, removed the topographic phase with a DEM, and terrain-corrected it. The interferogram showed <strong>irregular, spaced fringes</strong> — each worth 2.8 cm of LOS displacement — consistent with a <strong>M 5.1</strong> event and a <strong>deep rupture</strong> rather than a shallow surface break. The coherence map showed decorrelation over vegetated and disturbed areas. Finally we differenced pre/post <strong>NRCS in dB</strong> for VV and VH; VH was more informative because it is less affected by humidity changes and more sensitive to volume scattering."</p></div>
@@ -1323,11 +1405,11 @@ svg.fig{width:100%;height:auto;display:block;background:#fff;border:1px solid va
 
 <h3>The two Rayleighs and the two "criteria" — do not confuse them</h3>
 <table><thead><tr><th>Name</th><th>Field</th><th>Says</th></tr></thead><tbody>
-<tr><td><strong>Rayleigh roughness criterion</strong></td><td>Surface scattering</td><td>ΔΦ = 4πσcosθ/λ decides smooth vs rough (§4)</td></tr>
-<tr><td><strong>Rayleigh resolution criterion</strong></td><td>Optics</td><td>θ &gt; 1.22λ/D — two sources separable if one peak sits on the other's first null (§12)</td></tr>
-<tr><td><strong>Rayleigh scattering regime</strong></td><td>Volume scattering</td><td>L &lt; λ ⇒ scattering ∝ λ⁻⁴ (§9)</td></tr>
-<tr><td><strong>Rayleigh distribution</strong></td><td>Statistics</td><td>The amplitude distribution of speckle, r = √(I²+Q²) (§15)</td></tr>
-<tr><td><strong>Rayleigh–Jeans approximation</strong></td><td>Black body</td><td>Low-frequency limit of Planck ⇒ microwaves, B linear in T (§5)</td></tr>
+<tr><td><strong>Rayleigh roughness criterion</strong></td><td>Surface scattering</td><td>ΔΦ = 4πσcosθ/λ decides smooth vs rough (topic 4)</td></tr>
+<tr><td><strong>Rayleigh resolution criterion</strong></td><td>Optics</td><td>θ &gt; 1.22λ/D — two sources separable if one peak sits on the other's first null (topic 12)</td></tr>
+<tr><td><strong>Rayleigh scattering regime</strong></td><td>Volume scattering</td><td>L &lt; λ ⇒ scattering ∝ λ⁻⁴ (topic 9)</td></tr>
+<tr><td><strong>Rayleigh distribution</strong></td><td>Statistics</td><td>The amplitude distribution of speckle, r = √(I²+Q²) (topic 15)</td></tr>
+<tr><td><strong>Rayleigh–Jeans approximation</strong></td><td>Black body</td><td>Low-frequency limit of Planck ⇒ microwaves, B linear in T (topic 5)</td></tr>
 </tbody></table>
 
 <h3>Polarization conventions</h3>
@@ -1544,12 +1626,16 @@ function fit(cv){
   if(!cv._h){cv._h=+cv.getAttribute('height')||260;}
   var w=cv.clientWidth||cv.parentElement.clientWidth||620;
   var dpr=Math.min(2,window.devicePixelRatio||1);
-  cv.style.height=cv._h+'px';
-  cv.width=Math.round(w*dpr); cv.height=Math.round(cv._h*dpr);
+  var hh=cv._h;
+  if(w<560) hh=Math.round(cv._h*0.88);
+  if(w<400) hh=Math.round(cv._h*0.80);
+  if(cv._grow) hh=Math.round(hh*cv._grow(w));
+  cv.style.height=hh+'px';
+  cv.width=Math.round(w*dpr); cv.height=Math.round(hh*dpr);
   var c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0);
-  c.clearRect(0,0,w,cv._h);
+  c.clearRect(0,0,w,hh);
   c.font='12px "Source Serif 4",Georgia,serif';
-  return {c:c,w:w,h:cv._h};
+  return {c:c,w:w,h:hh,narrow:w<560,tiny:w<400};
 }
 function frame(o,ml,mr,mt,mb){
   return {c:o.c,w:o.w,h:o.h,L:ml,R:o.w-mr,T:mt,B:o.h-mb};
@@ -1894,7 +1980,7 @@ function rnd(seedObj){ // deterministic-ish PRNG
   function draw(){
     var T=+$('p7t').value, e=+$('p7e').value, TB=e*T;
     $('p7t-v').textContent=T+' K'; $('p7e-v').textContent=e.toFixed(3);
-    var o=fit(cv),c=o.c,W=o.w,H=o.h, bx=70, bw=W-150, y1=44, y2=104, bh=34;
+    var o=fit(cv),c=o.c,W=o.w,H=o.h, bx=Math.min(74,W*0.23), bw=W-bx-Math.min(76,W*0.22), y1=44, y2=104, bh=34;
     function bar(y,val,max,color,label,val2){
       c.save();c.fillStyle=SOFT;rrect(c,bx,y,bw,bh,6);c.fill();
       c.fillStyle=color;rrect(c,bx,y,Math.max(6,bw*val/max),bh,6);c.fill();c.restore();
@@ -1973,12 +2059,12 @@ function rnd(seedObj){ // deterministic-ish PRNG
     var t=Math.max(0,1-w-a);
     $('p9w-v').textContent=w.toFixed(2); $('p9a-v').textContent=a.toFixed(2);
     var o=fit(cv),c=o.c,W=o.w,H=o.h,bx=24,bw=W-48,by=H-58,bh=30;
-    var cx=W/2, sy=96;
+    var cx=W/2, sy=96, ain=Math.min(150,W*0.33);
     /* target block */
     c.save();c.fillStyle='#efe7db';c.strokeStyle='#b9ab99';rrect(c,cx-70,sy,140,34,7);c.fill();c.stroke();c.restore();
     txt(c,'TARGET',cx,sy+17,MUT,12,'center','middle',true);
-    arrow(c,cx-150,22,cx-20,sy-4,TEAL,2.6,9); txt(c,'dP i',cx-152,20,TEAL,12,'right');
-    if(w>0.02){arrow(c,cx+8,sy-4,cx+8+110*Math.max(.3,w),22,ACC,1+4*w,9);txt(c,'dP s  scattered  '+(w*100).toFixed(0)+'%',cx+124,20,ACC,12);}
+    arrow(c,cx-ain,22,cx-20,sy-4,TEAL,2.6,9); txt(c,'dP i',cx-ain-2,20,TEAL,12,'right');
+    if(w>0.02){var aw=Math.min(110,W*0.24)*Math.max(.3,w);arrow(c,cx+8,sy-4,cx+8+aw,22,ACC,1+4*w,9);txt(c,'scattered '+(w*100).toFixed(0)+'%',Math.min(W-4,cx+16+aw),20,ACC,12);}
     if(t>0.02){arrow(c,cx,sy+38,cx,sy+38+52*Math.max(.4,t),TEAL,1+4*t,9);txt(c,'dP t  transmitted  '+(t*100).toFixed(0)+'%',cx+10,sy+52,TEAL,12);}
     if(a>0.02){txt(c,'dP a  absorbed → HEAT  '+(a*100).toFixed(0)+'%',cx-80,sy+40,GOLD,12,'right');
       c.save();c.strokeStyle=GOLD;c.lineWidth=1+3*a;
@@ -2042,6 +2128,7 @@ function rnd(seedObj){ // deterministic-ish PRNG
 /* =============== PB scattering regimes =============== */
 (function(){
   var cv=$('pBcv'); if(!cv) return;
+  cv._grow=function(w){return w<560?1.34:1;};
   function fmt(v){return v<0.001?(v*1e3).toFixed(2)+' nm':v<1?(v*1e3).toFixed(0)+' nm':v<1000?v.toFixed(2)+' µm':(v/1000).toFixed(2)+' mm';}
   function draw(){
     var L=Math.pow(10,+$('pBl').value), lam=Math.pow(10,+$('pBw').value);
@@ -2049,22 +2136,22 @@ function rnd(seedObj){ // deterministic-ish PRNG
     var r=L/lam, lr=Math.log10(r);
     var regime = lr<-0.7?'RAYLEIGH' : lr<0.7?'MIE' : 'OPTICAL / GEOMETRIC';
     var col = lr<-0.7?VIO : lr<0.7?TEAL : ACC;
-    var o=fit(cv),c=o.c,W=o.w,H=o.h;
+    var o=fit(cv),c=o.c,W=o.w,H=o.h,nw=o.narrow;
     /* regime bar */
-    var bx=24,bw=W*0.55-40,by=42,bh=22;
+    var bx=nw?16:24, bw=(nw?W-32:W*0.55-40), by=nw?58:42, bh=22;
     var stops=[[-3,-0.7,VIO,'Rayleigh  L<λ'],[-0.7,0.7,TEAL,'Mie  L~λ'],[0.7,3,ACC,'Optical  L>λ']];
     for(var i=0;i<stops.length;i++){
       var x0=bx+bw*(stops[i][0]+3)/6, x1=bx+bw*(stops[i][1]+3)/6;
       c.save();c.globalAlpha=.22;c.fillStyle=stops[i][2];c.fillRect(x0,by,x1-x0,bh);c.restore();
-      txt(c,stops[i][3],(x0+x1)/2,by+bh+4,stops[i][2],11,'center');
+      txt(c,stops[i][3],(x0+x1)/2,by+bh+4,stops[i][2],nw?9.5:11,'center');
     }
     c.save();c.strokeStyle='#c9bfb2';c.strokeRect(bx,by,bw,bh);c.restore();
     var px=bx+bw*(Math.max(-3,Math.min(3,lr))+3)/6;
     c.save();c.fillStyle=col;c.beginPath();c.moveTo(px,by-8);c.lineTo(px-6,by-18);c.lineTo(px+6,by-18);c.closePath();c.fill();c.restore();
-    txt(c,'L/λ = '+(r<0.01?r.toExponential(1):r.toFixed(r<10?2:1)),px,by-32,col,12.5,'center','top',true);
-    txt(c,'size parameter  L/λ  (log scale)',bx,by-52,MUT,12);
+    txt(c,'L/λ = '+(r<0.01?r.toExponential(1):r.toFixed(r<10?2:1)),Math.max(30,Math.min(W-30,px)),by-32,col,12.5,'center','top',true);
+    txt(c,'size parameter  L/λ  (log scale)',bx,by-52,MUT,nw?11:12);
     /* polar phase function */
-    var cx=W*0.78, cy=H/2+10, R=Math.min(H/2-24,W*0.2);
+    var cx=nw?W/2:W*0.78, cy=nw?by+bh+72:H/2+10, R=nw?Math.min(58,W*0.2):Math.min(H/2-24,W*0.2);
     c.save();c.strokeStyle='#e6ddd2';c.beginPath();c.arc(cx,cy,R,0,7);c.stroke();
     c.beginPath();c.moveTo(cx-R-8,cy);c.lineTo(cx+R+8,cy);c.stroke();c.restore();
     arrow(c,cx-R-34,cy,cx-R-6,cy,TEAL,2,7);
@@ -2390,17 +2477,17 @@ function rnd(seedObj){ // deterministic-ish PRNG
     $('pJr-v').textContent=(R/1000).toFixed(0)+' km'; $('pJt-v').textContent=th+'°';
     var lam=0.056, c0=3e8;
     var rs=c0/(2*B), rg=rs/Math.sin(th*Math.PI/180), azR=R*lam/L, azS=L/2;
-    var o=fit(cv),c=o.c,W=o.w,H=o.h, bx=170, bw=W-230, i;
+    var o=fit(cv),c=o.c,W=o.w,H=o.h, bx=Math.min(178,W*0.42), bw=W-bx-Math.min(60,W*0.16), i;
     var rows=[['slant range  c/2B',rs,ACC],['ground range  ρr/sinθ',rg,ACC],
               ['azimuth — real aperture  Rλ/L',azR,MUT],['azimuth — SAR  L/2',azS,TEAL]];
     var maxv=Math.max(rs,rg,azR,azS);
     for(i=0;i<rows.length;i++){
       var y=30+i*46, v=rows[i][1];
-      txt(c,rows[i][0],bx-10,y+11,INK,12.5,'right','middle');
+      txt(c,rows[i][0],bx-8,y+11,INK,o.narrow?10.5:12.5,'right','middle');
       c.save();c.fillStyle=SOFT;rrect(c,bx,y,bw,22,5);c.fill();
       c.fillStyle=rows[i][2];
       rrect(c,bx,y,Math.max(4,bw*Math.log10(1+9*v/maxv)),22,5);c.fill();c.restore();
-      mono(c,v>1000?(v/1000).toFixed(2)+' km':v.toFixed(2)+' m',bx+bw+8,y+11,rows[i][2],12.5,'left','middle');
+      mono(c,v>1000?(v/1000).toFixed(2)+' km':v.toFixed(2)+' m',bx+bw+6,y+11,rows[i][2],o.narrow?10.5:12.5,'left','middle');
     }
     txt(c,'(log-scaled bars)',bx,H-16,MUT,11);
     $('pJout').innerHTML='Range resolution ρ<sub>r</sub> = c/2B = <span class="big">'+rs.toFixed(2)+' m</span> (ground: '+rg.toFixed(2)+' m) — <b>independent of range</b>, set only by bandwidth.<br>'+
@@ -2449,7 +2536,7 @@ function rnd(seedObj){ // deterministic-ish PRNG
     var N=+$('pLn').value, ML=+$('pLm').value;
     $('pLn-v').textContent=N; $('pLm-v').textContent=ML+' look'+(ML>1?'s':'');
     var o=fit(cv),c=o.c,W=o.w,H=o.h,i,j;
-    var half=Math.min(W*0.46,H-40), cx=W*0.24, cy=H/2+4, R=half/2-6;
+    var half=Math.min(W*0.46,H-40), cx=W*0.24, cy=H/2+4, R=Math.max(28,half/2-6);
     /* phasor sum */
     c.save();c.strokeStyle='#efe9e0';c.beginPath();c.arc(cx,cy,R,0,7);c.stroke();
     c.beginPath();c.moveTo(cx-R,cy);c.lineTo(cx+R,cy);c.moveTo(cx,cy-R);c.lineTo(cx,cy+R);c.stroke();c.restore();
@@ -2511,14 +2598,14 @@ function rnd(seedObj){ // deterministic-ish PRNG
   function draw(){
     var d=D[cur], o=fit(cv),c=o.c,W=o.w,H=o.h,i;
     var labs=['HH','VV','HV = VH'], cols=[ACC,TEAL,VIO];
-    var bx=110, bw=W-190;
-    txt(c,d.n,bx-96,14,INK,13,'left','top',true);
+    var bx=Math.min(112,W*0.27), bw=W-bx-Math.min(78,W*0.21);
+    txt(c,d.n,10,12,INK,o.narrow?11.5:13,'left','top',true);
     for(i=0;i<3;i++){
       var y=48+i*52, v=d.v[i];
-      txt(c,labs[i],bx-12,y+13,INK,13.5,'right','middle',true);
+      txt(c,labs[i],bx-9,y+13,INK,o.narrow?11.5:13.5,'right','middle',true);
       c.save();c.fillStyle=SOFT;rrect(c,bx,y,bw,26,6);c.fill();
       c.fillStyle=cols[i];rrect(c,bx,y,Math.max(5,bw*v),26,6);c.fill();c.restore();
-      mono(c,(10*Math.log10(v)).toFixed(1)+' dB',bx+bw+8,y+13,cols[i],12.5,'left','middle');
+      mono(c,(10*Math.log10(v)).toFixed(1)+' dB',bx+bw+6,y+13,cols[i],o.narrow?10.5:12.5,'left','middle');
     }
     txt(c,'relative backscattered power per channel',bx,H-16,MUT,11.5);
     $('pMout').innerHTML='<b>'+d.n+'</b><br>'+d.d+
@@ -2545,7 +2632,8 @@ function rnd(seedObj){ // deterministic-ish PRNG
     $('pNc').className='btn'+(mode==='coh'?' on':'');
     $('pNu').className='btn'+(mode==='unw'?' on':'');
     var o=fit(cv),c=o.c,W=o.w,H=o.h;
-    var S=Math.min(W-150,H-40), ox=14, oy=(H-S)/2;
+    var cbw0=o.narrow?12:18, gutter=o.narrow?78:150;
+    var S=Math.max(90,Math.min(W-gutter,H-40)), ox=o.narrow?8:14, oy=(H-S)/2;
     if(!off){off=document.createElement('canvas');off.width=G;off.height=G;}
     var oc=off.getContext('2d'), id=oc.createImageData(G,G), sd={s:1234}, i,j;
     var half=(lam/2);
@@ -2572,7 +2660,7 @@ function rnd(seedObj){ // deterministic-ish PRNG
     c.drawImage(off,ox,oy,S,S);
     c.save();c.strokeStyle='#c9bfb2';c.strokeRect(ox,oy,S,S);c.restore();
     /* colour bar */
-    var cbx=ox+S+22, cbw=18, cbh=S*0.8, cby=oy+S*0.1;
+    var cbx=ox+S+(o.narrow?12:22), cbw=cbw0, cbh=S*0.8, cby=oy+S*0.1;
     for(i=0;i<cbh;i++){
       var f2=i/cbh, cc;
       if(mode==='ifg')cc=hsv(f2*360,0.78,0.95);
@@ -2581,12 +2669,12 @@ function rnd(seedObj){ // deterministic-ish PRNG
       c.fillStyle='rgb('+cc[0]+','+cc[1]+','+cc[2]+')';c.fillRect(cbx,cby+i,cbw,1.4);
     }
     c.save();c.strokeStyle='#c9bfb2';c.strokeRect(cbx,cby,cbw,cbh);c.restore();
-    if(mode==='ifg'){mono(c,'−π',cbx+cbw+5,cby,MUT,11);mono(c,'+π',cbx+cbw+5,cby+cbh,MUT,11,'left','bottom');
-      txt(c,'wrapped phase',cbx-4,cby-16,INK,12,'left','top',true);}
-    else if(mode==='coh'){mono(c,'1.0',cbx+cbw+5,cby,MUT,11);mono(c,'0.0',cbx+cbw+5,cby+cbh,MUT,11,'left','bottom');
-      txt(c,'coherence γ',cbx-4,cby-16,INK,12,'left','top',true);}
-    else {mono(c,D.toFixed(1)+' cm',cbx+cbw+5,cby,MUT,11);mono(c,'0',cbx+cbw+5,cby+cbh,MUT,11,'left','bottom');
-      txt(c,'LOS displacement',cbx-4,cby-16,INK,12,'left','top',true);}
+    if(mode==='ifg'){mono(c,'−π',cbx+cbw+4,cby,MUT,10.5);mono(c,'+π',cbx+cbw+4,cby+cbh,MUT,10.5,'left','bottom');
+      txt(c,o.narrow?'phase':'wrapped phase',cbx-4,cby-16,INK,o.narrow?11:12,'left','top',true);}
+    else if(mode==='coh'){mono(c,'1.0',cbx+cbw+4,cby,MUT,10.5);mono(c,'0.0',cbx+cbw+4,cby+cbh,MUT,10.5,'left','bottom');
+      txt(c,o.narrow?'γ':'coherence γ',cbx-4,cby-16,INK,o.narrow?11:12,'left','top',true);}
+    else {mono(c,D.toFixed(1)+' cm',cbx+cbw+4,cby,MUT,10.5);mono(c,'0',cbx+cbw+4,cby+cbh,MUT,10.5,'left','bottom');
+      txt(c,o.narrow?'LOS':'LOS displacement',cbx-4,cby-16,INK,o.narrow?11:12,'left','top',true);}
     var nf=D/half;
     $('pNout').innerHTML='One fringe = λ/2 = <span class="big">'+half.toFixed(2)+' cm</span> of LOS displacement. Peak displacement '+D.toFixed(1)+' cm ⇒ about <span class="big">'+nf.toFixed(1)+' fringes</span> from the edge to the centre.<br>'+
       (mode==='ifg'?'Reading in the <b>ascending</b> orbit direction: a full <b>red → red</b> cycle means the ground has <b>risen</b>; <b>blue → blue</b> means it has <b>subsided</b>. '+
@@ -2689,6 +2777,37 @@ function rnd(seedObj){ // deterministic-ish PRNG
     bar.style.width=(docH>0?Math.min(100,y/docH*100):0)+'%';
   }
   window.addEventListener('scroll',onScroll,{passive:true}); onScroll();
+  /* --- sidebar open/close --- */
+  var body=document.body, mq=function(){return window.innerWidth<=900;};
+  function setNav(closed,remember){
+    body.className=closed?'nav-closed':'';
+    $('navOpen').setAttribute('aria-expanded',closed?'false':'true');
+    if(remember){try{localStorage.setItem('eoNav',closed?'1':'0');}catch(e){}}
+    setTimeout(function(){for(var k=0;k<REDRAW.length;k++)REDRAW[k]();},60);
+  }
+  var stored=null; try{stored=localStorage.getItem('eoNav');}catch(e){}
+  setNav(mq()?true:(stored==='1'),false);
+  $('navOpen').onclick=function(){setNav(false,true);};
+  $('navClose').onclick=function(){setNav(true,true);};
+  $('navScrim').onclick=function(){setNav(true,true);};
+  for(var q=0;q<links.length;q++) links[q].addEventListener('click',function(){ if(mq()) setNav(true,false); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&mq()&&body.className!=='nav-closed') setNav(true,false); });
+  var lastW=window.innerWidth;
+  window.addEventListener('resize',function(){
+    var wasMobile=lastW<=900, isMobile=window.innerWidth<=900; lastW=window.innerWidth;
+    if(wasMobile!==isMobile){ var st=null; try{st=localStorage.getItem('eoNav');}catch(e){}
+      setNav(isMobile?true:(st==='1'),false); }
+  });
+
+  /* --- make every table horizontally scrollable --- */
+  var tbs=document.querySelectorAll('table');
+  for(var m=0;m<tbs.length;m++){
+    var t=tbs[m];
+    if(t.parentNode&&t.parentNode.className==='tbl-wrap') continue;
+    var wrap=document.createElement('div'); wrap.className='tbl-wrap';
+    t.parentNode.insertBefore(wrap,t); wrap.appendChild(t);
+  }
+
   $('navsearch').addEventListener('input',function(){
     var q=this.value.toLowerCase().trim(), any=false;
     for(var k=0;k<links.length;k++){
@@ -2715,18 +2834,18 @@ function rnd(seedObj){ // deterministic-ish PRNG
   ['Fully polarized condition','Deterministic amplitude & phase relation ⇒ |µxy| = 1 ⇒ det(W) = 0 ⇒ P = 1. Necessary for monochromatic waves.'],
   ['Unpolarized condition','µxy = 0 AND Wxx = Wyy.'],
   ['tr(W) is…','The total power of the wave.'],
-  ['P = 0 / P = 1 / 0<P<1','0: ellipse not defined, varies every instant. 1: perfectly defined. In between: a trend, varies gradually.'],
+  ['P = 0 / P = 1 / 0&lt;P&lt;1','0: ellipse not defined, varies every instant. 1: perfectly defined. In between: a trend, varies gradually.'],
   ['Depolarization vs repolarization','Depolarization lowers P. Repolarization rotates V↔H with P still = 1.'],
   ['Horizontal polarization = ?','TE: the ELECTRIC field is transverse, ⊥ plane of incidence, developing along y.'],
   ['Vertical polarization = ?','TM: the MAGNETIC field is transverse; E lies in the plane of incidence.'],
   ['Four interaction mechanisms','Reflection (obstacle > λ), diffraction (pointed obstacles), refraction (through an interface), scattering (rough surface).'],
   ['Path loss','L = Pt/Pr; grows with distance and frequency; Pr ∝ 1/R². Downlink uses lower frequency ⇒ fewer losses.'],
   ['Impedance & refractive index','η = η₀/n, n = c/v_f.'],
-  ['Γ < 0 means…','A phase change (180° inversion) on reflection.'],
+  ['Γ &lt; 0 means…','A phase change (180° inversion) on reflection.'],
   ['Brewster angle','θB = arctan(n₂/n₁): Γ_TM = 0, vertical fully transmitted, only TE reflected. No Brewster for TE.'],
   ['Γ_TM vs Γ_TE trends','TM increases with θ and crosses zero at θB. TE decreases, becoming more negative (greater phase reversal). Equal at 0°; all reflected at 90°.'],
   ['ρ = +1 vs −1','+1: total reflection, no phase inversion. −1: total reflection with phase inversion.'],
-  ['Rayleigh roughness criterion','ΔΦ = 4πσcosθᵢ/λ, σ = Gaussian std of surface height. ΔΦ < π/2 ⇒ smooth.'],
+  ['Rayleigh roughness criterion','ΔΦ = 4πσcosθᵢ/λ, σ = Gaussian std of surface height. ΔΦ &lt; π/2 ⇒ smooth.'],
   ['Two roughness rules','Larger θᵢ ⇒ less roughness perceived. Larger λ ⇒ surface looks smoother.'],
   ['Penalty factor f(σs)','Reduces the specular component. f = 1 smooth (ΔΦ = 0); f = 0 rough (ΔΦ ≠ 0).'],
   ['Black body','Absorbs completely without reflecting (ideally opaque); ideal absorber and emitter; radiation ∝ its temperature.'],
@@ -2748,7 +2867,7 @@ function rnd(seedObj){ // deterministic-ish PRNG
   ['SRT vs VRT','Scalar: polarization-independent, optical. Vector: polarization-dependent, microwave.'],
   ['Extinction coefficient','ke = ka + ks. Albedo w = ks/ke. Optical thickness dτ = ke·dr.'],
   ['RT formal solution','B(r) = B(0)e^(−τ) + ∫ ke·J·e^(−τ′) dr′ — attenuated input plus attenuated sources along the path.'],
-  ['Three scattering regimes','Rayleigh L<λ (∝λ⁻⁴); Mie L~λ (uniform, λ-independent); Optical L>λ (direction-dependent, f-independent).'],
+  ['Three scattering regimes','Rayleigh L&lt;λ (∝λ⁻⁴); Mie L~λ (uniform, λ-independent); Optical L>λ (direction-dependent, f-independent).'],
   ['Volume scattering condition','L/λ ~ 1 ⇒ volumetric scattering. L/λ ≪ 1 ⇒ essentially none.'],
   ['Raman vs fluorescence','Raman: decay to lower level + emission at high frequencies. Fluorescence: emission at LOWER frequencies. Both inelastic.'],
   ['Apparent brightness','Incident + ground + atmosphere (up and down). VIS/NIR: reflectivity dominates. IR/microwave: emission dominates (passive).'],
